@@ -16,3 +16,6 @@ tiktoken==0.12.0
 sentence-transformers>=2.7.0,<3.0
 huggingface_hub<1.0
 transformers<5.0
+# Safety net: audioop was removed from stdlib in Python 3.13, but pydub
+# (transitive through gradio) still imports it. Only installed on 3.13+.
+audioop-lts; python_version >= "3.13"
