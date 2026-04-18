@@ -635,6 +635,94 @@ label, label span, .gr-form label, .label, .block-label {
 }
 
 /* ============================================================
+   HARD TEXT-COLOR OVERRIDES — fixes faded-gray rendering in
+   markdown output (tables, lists, blockquotes, etc.)
+   ============================================================ */
+.output-markdown,
+.output-markdown *,
+.gradio-container .prose,
+.gradio-container .prose *,
+.gradio-container .markdown,
+.gradio-container .markdown * {
+    color: #1a1a1a !important;
+}
+
+/* Tables inside markdown output */
+.output-markdown table,
+.gradio-container .prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 14px 0;
+    font-size: 14px;
+}
+.output-markdown th,
+.output-markdown td,
+.gradio-container .prose th,
+.gradio-container .prose td {
+    padding: 10px 14px !important;
+    border: 1px solid #e2dfd3 !important;
+    text-align: left;
+    color: #1a1a1a !important;
+    background: #ffffff !important;
+    line-height: 1.5;
+}
+.output-markdown th,
+.gradio-container .prose th {
+    background: #f5f2e8 !important;
+    font-weight: 600 !important;
+    color: #0d0d0d !important;
+    letter-spacing: 0.01em;
+}
+
+/* Headings inside markdown output */
+.output-markdown h1,
+.output-markdown h2,
+.output-markdown h3,
+.output-markdown h4,
+.gradio-container .prose h1,
+.gradio-container .prose h2,
+.gradio-container .prose h3,
+.gradio-container .prose h4 {
+    color: #0d0d0d !important;
+}
+
+/* Code + inline code */
+.output-markdown code,
+.output-markdown pre,
+.gradio-container .prose code,
+.gradio-container .prose pre {
+    color: #1a1a1a !important;
+    background: #f5f2e8 !important;
+    border: 1px solid #e2dfd3;
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-family: "JetBrains Mono", monospace !important;
+    font-size: 0.92em;
+}
+.output-markdown pre,
+.gradio-container .prose pre {
+    padding: 12px 14px;
+    overflow-x: auto;
+}
+
+/* Blockquote (agent sometimes emits them) */
+.output-markdown blockquote,
+.gradio-container .prose blockquote {
+    border-left: 3px solid #c2b79a;
+    padding-left: 14px;
+    color: #3a3833 !important;
+    font-style: italic;
+    margin: 12px 0;
+}
+
+/* Link contrast inside markdown output */
+.output-markdown a,
+.gradio-container .prose a {
+    color: #5b2e2e !important;
+    text-decoration: underline;
+}
+
+/* ============================================================
    Footer
    ============================================================ */
 .app-footer {
