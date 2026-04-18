@@ -54,6 +54,7 @@ import gradio as gr
 
 import rag
 from agent import build_agent_for_session, run_agent
+from ratelimit import SessionRateLimiter
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -76,11 +77,21 @@ def _new_state() -> Dict[str, Any]:
         "uploaded_files": [],   # list[str]: filenames the user has indexed
         "session_retriever": None,
         "agent": None,
+        "rate_limiter": SessionRateLimiter(),
     }
     if ALLOW_ENV_KEYS:
         state["anthropic_key"] = os.environ.get("ANTHROPIC_API_KEY", "") or ""
         state["tavily_key"] = os.environ.get("TAVILY_API_KEY", "") or ""
     return state
+
+
+def _rate_check(state: Dict[str, Any], action: str) -> Tuple[bool, str]:
+    """Thin wrapper that tolerates old sessions without a limiter."""
+    rl = state.get("rate_limiter")
+    if rl is None:
+        rl = SessionRateLimiter()
+        state["rate_limiter"] = rl
+    return rl.check(action)
 
 
 def _format_status(state: Dict[str, Any]) -> str:
@@ -182,6 +193,10 @@ def index_uploaded_pdfs(
     if not files:
         return ("No files selected.", _format_status(state), state)
 
+    ok, reason = _rate_check(state, "upload")
+    if not ok:
+        return (reason, _format_status(state), state)
+
     paths: List[str] = []
     for f in files:
         if isinstance(f, str):
@@ -259,6 +274,11 @@ def analyze_company(
         yield "**Please enter a ticker symbol** (e.g. `MSFT`, `NVDA`, `AAPL`)."
         return
 
+    ok, reason = _rate_check(state, "analyze")
+    if not ok:
+        yield f"**{reason}**"
+        return
+
     query = (custom_query or "").strip() or DEFAULT_SINGLE_PROMPT.format(ticker=ticker)
     thread_id = f"single-{ticker}-{int(time.time())}"
 
@@ -297,6 +317,14 @@ def rank_companies(tickers_csv: str, state: Dict[str, Any], progress=gr.Progress
     tickers = [t.strip().upper() for t in (tickers_csv or "").split(",") if t.strip()]
     if len(tickers) < 2:
         yield "**Please enter at least 2 tickers**, comma-separated (e.g. `MSFT, NVDA, GOOGL`)."
+        return
+    if len(tickers) > 8:
+        yield "**Max 8 tickers per ranking request** (to keep latency + cost reasonable)."
+        return
+
+    ok, reason = _rate_check(state, "rank")
+    if not ok:
+        yield f"**{reason}**"
         return
 
     query = DEFAULT_RANK_PROMPT.format(companies=", ".join(tickers))
@@ -854,7 +882,10 @@ with gr.Blocks(theme=THEME, css=CUSTOM_CSS, title="Autonomous Financial Analyst"
 
 
 if __name__ == "__main__":
-    # show_api=False avoids a gradio_client 1.3.0 bug where /info schema
+    # show_api=False — avoids a gradio_client 1.3.0 bug where /info schema
     # introspection recurses through gr.State holding the compiled LangGraph
     # agent (non-JSON-serializable). Safe to disable — not used by the UI.
-    demo.queue().launch(show_api=False)
+    #
+    # max_size + default_concurrency_limit — Space-wide backpressure so one
+    # chatty user can't starve the 2-vCPU HF free tier.
+    demo.queue(max_size=20, default_concurrency_limit=2).launch(show_api=False)
