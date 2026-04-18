@@ -31,8 +31,10 @@ dist/
 # Runtime artifacts (regenerated at startup)
 # ---------------------------------------------------------------------------
 data/chroma_index/
-data/Companies-AI-Initiatives/
 data/Healthcare-AI-Initiatives/
+# Bundled base-corpus PDFs (data/Companies-AI-Initiatives/*.pdf) ARE tracked.
+# Any binary archives in data/ are NOT — HF rejects binary files via plain git.
+data/*.zip
 
 # ---------------------------------------------------------------------------
 # Gradio
