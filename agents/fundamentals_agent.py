@@ -82,9 +82,24 @@ def fundamentals_agent(state: dict, clients) -> dict:
             raw[f"{tag}_yoy_pct"] = yoy_delta_pct(latest, prior)
 
     raw["revenue_yoy_pct"] = raw.get("Revenues_yoy_pct")
-    raw["mdna_excerpt"] = bundle.mdna_text[:2000]
+    raw["mdna_excerpt"] = bundle.mdna_text  # already capped at 8K by edgar.extract_mdna
+    raw["risk_factors_excerpt"] = bundle.risk_factors_text  # capped at 8K by edgar.extract_risk_factors
     raw["latest_10q_filed"] = bundle.latest_10q.filing_date if bundle.latest_10q else None
     raw["latest_10k_filed"] = bundle.latest_10k.filing_date if bundle.latest_10k else None
+
+    mdna_block = (
+        f"\n\nMD&A excerpt (10-Q):\n{bundle.mdna_text}"
+        if bundle.mdna_text else ""
+    )
+    # Spec §5.3: include 10-K Risk Factors when MD&A is short, otherwise as
+    # supplementary context. Cap at 4K chars to keep prompt size sane.
+    risk_block = ""
+    if bundle.risk_factors_text:
+        rf_cap = 4000
+        risk_block = (
+            f"\n\nRisk Factors excerpt (10-K Item 1A):\n"
+            f"{bundle.risk_factors_text[:rf_cap]}"
+        )
 
     prompt = (
         f"You are a fundamentals analyst. Analyze {ticker} ({bundle.company_name}).\n\n"
@@ -94,8 +109,10 @@ def fundamentals_agent(state: dict, clients) -> dict:
             f"(YoY {raw.get(f'{k}_yoy_pct')}%)"
             for k in KEY_TAGS
         )
-        + f"\n\nMD&A excerpt (10-Q):\n{raw['mdna_excerpt'][:3000]}\n\n"
-        "Cover: revenue trend, margin trajectory, balance-sheet health, MD&A signals.\n\n"
+        + mdna_block
+        + risk_block
+        + "\n\nCover: revenue trend, margin trajectory, balance-sheet health, "
+          "MD&A signals, and any material risks called out in Item 1A.\n\n"
         "Respond with JSON ONLY:\n"
         '{"signal": "BULLISH"|"BEARISH"|"NEUTRAL", "confidence": 0.0..1.0, '
         '"summary": "one sentence", "section_markdown": "## Fundamentals\\n... 200-300 word section ..."}'

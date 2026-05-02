@@ -224,6 +224,48 @@ def extract_mdna(filing: Filing, max_chars: int = 8000) -> str:
     return extract_mdna_from_html(fetch_filing_html(filing), max_chars=max_chars)
 
 
+# -- Risk Factors extraction (10-K Item 1A) ------------------------------------
+
+_RISK_FACTORS_HEADING_RE = re.compile(
+    r"item\s*1a\b.*?risk\s*factors?",
+    re.IGNORECASE | re.DOTALL,
+)
+_AFTER_RISK_ITEM_RE = re.compile(r"item\s*(1b|2)\b", re.IGNORECASE)
+
+
+def extract_risk_factors_from_html(html: str, max_chars: int = 8000) -> str:
+    """Extract Item 1A (Risk Factors) text from a 10-K filing's primary HTML.
+
+    Same strategy as `extract_mdna_from_html`: BeautifulSoup strip, locate
+    `Item 1A. Risk Factors` heading, slice to the next item (1B or 2), cap.
+    Returns empty string when the heading isn't present (issuers that file
+    only 20-F or 40-F won't have this section).
+    """
+    if not html:
+        return ""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(separator="\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    start = _RISK_FACTORS_HEADING_RE.search(text)
+    if not start:
+        return ""
+
+    after = text[start.end():]
+    end_match = _AFTER_RISK_ITEM_RE.search(after)
+    body = after[: end_match.start()] if end_match else after
+    body = body.strip()
+    if len(body) > max_chars:
+        body = body[:max_chars]
+    return body
+
+
+def extract_risk_factors(filing: Filing, max_chars: int = 8000) -> str:
+    """Convenience: download a 10-K and extract Item 1A in one shot."""
+    return extract_risk_factors_from_html(fetch_filing_html(filing), max_chars=max_chars)
+
+
 # -- Aggregator ----------------------------------------------------------------
 
 
@@ -236,6 +278,7 @@ class EdgarBundle:
     latest_10k: Optional[Filing]
     xbrl_facts: dict
     mdna_text: str
+    risk_factors_text: str = ""
     fetched_at: float = field(default_factory=_now)
 
 
@@ -245,12 +288,17 @@ def build_edgar_bundle(ticker: str) -> EdgarBundle:
     Raises TickerNotFound if SEC has no record. Other errors propagate from the
     individual fetchers. The Fundamentals agent is responsible for catching
     those and producing a degraded AgentSignal.
+
+    Risk Factors are pulled from the 10-K (annual). MD&A is pulled from the
+    most recent 10-Q (quarterly). Either may be empty if the filing is missing
+    or the section heading isn't present.
     """
     cik, name = resolve_ticker(ticker)
     f10q = fetch_latest_10q(cik)
     f10k = fetch_latest_10k(cik)
     facts = fetch_company_facts(cik)
     mdna = extract_mdna(f10q) if f10q else ""
+    risk_factors = extract_risk_factors(f10k) if f10k else ""
     return EdgarBundle(
         ticker=ticker.strip().upper(),
         cik=cik,
@@ -259,4 +307,5 @@ def build_edgar_bundle(ticker: str) -> EdgarBundle:
         latest_10k=f10k,
         xbrl_facts=facts,
         mdna_text=mdna,
+        risk_factors_text=risk_factors,
     )

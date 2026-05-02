@@ -40,6 +40,11 @@ def _stub_all(cik="0000789019", company="MICROSOFT CORP"):
         "https://www.sec.gov/Archives/edgar/data/789019/accq/q.htm",
         body="<html><body><h2>ITEM 2. MANAGEMENT'S DISCUSSION</h2><p>Revenue up</p></body></html>",
     )
+    responses.add(
+        responses.GET,
+        "https://www.sec.gov/Archives/edgar/data/789019/acck/k.htm",
+        body="<html><body><h2>ITEM 1A. RISK FACTORS</h2><p>Cloud demand risk.</p></body></html>",
+    )
 
 
 @responses.activate
@@ -52,6 +57,7 @@ def test_build_bundle_happy_path():
     assert bundle.latest_10q is not None
     assert bundle.latest_10k is not None
     assert "Revenue up" in bundle.mdna_text
+    assert "Cloud demand risk" in bundle.risk_factors_text
 
 
 @responses.activate
