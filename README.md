@@ -9,7 +9,7 @@ python_version: "3.12"
 app_file: app.py
 pinned: false
 license: mit
-short_description: Multi-agent equity analyst — 5 parallel specialists + supervisor.
+short_description: Multi-agent equity analyst — 5 specialists + supervisor.
 ---
 
 # MarketMind v2 — Multi-Agent Equity Analyst
