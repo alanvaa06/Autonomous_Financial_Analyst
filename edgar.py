@@ -110,3 +110,63 @@ def fetch_company_facts(cik: str) -> dict:
     data = resp.json()
     _FACTS_CACHE[cik] = (data, _now())
     return data
+
+
+# -- Filings (10-Q / 10-K) -----------------------------------------------------
+
+
+@dataclass
+class Filing:
+    cik: str
+    accession: str
+    form: str
+    filing_date: str
+    report_date: str
+    primary_document: str
+
+    @property
+    def primary_url(self) -> str:
+        accession_clean = self.accession.replace("-", "")
+        return (
+            f"https://www.sec.gov/Archives/edgar/data/"
+            f"{int(self.cik)}/{accession_clean}/{self.primary_document}"
+        )
+
+
+_SUBMISSIONS_CACHE: dict[str, tuple[dict, float]] = {}
+_SUBMISSIONS_TTL_SECONDS = 6 * 3600
+
+
+def _fetch_submissions(cik: str) -> dict:
+    cached = _SUBMISSIONS_CACHE.get(cik)
+    if cached and (_now() - cached[1]) < _SUBMISSIONS_TTL_SECONDS:
+        return cached[0]
+    url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+    data = _get(url).json()
+    _SUBMISSIONS_CACHE[cik] = (data, _now())
+    return data
+
+
+def _latest_filing_of(cik: str, form_target: str) -> Optional[Filing]:
+    data = _fetch_submissions(cik)
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    for i, form in enumerate(forms):
+        if form == form_target:
+            return Filing(
+                cik=cik,
+                accession=recent["accessionNumber"][i],
+                form=form,
+                filing_date=recent["filingDate"][i],
+                report_date=recent["reportDate"][i],
+                primary_document=recent["primaryDocument"][i],
+            )
+    return None
+
+
+def fetch_latest_10q(cik: str) -> Optional[Filing]:
+    return _latest_filing_of(cik, "10-Q")
+
+
+def fetch_latest_10k(cik: str) -> Optional[Filing]:
+    return _latest_filing_of(cik, "10-K")
