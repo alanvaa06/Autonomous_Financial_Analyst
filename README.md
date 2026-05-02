@@ -4,7 +4,7 @@ emoji: 📈
 colorFrom: indigo
 colorTo: purple
 sdk: gradio
-sdk_version: 4.44.1
+sdk_version: 5.50.0
 python_version: "3.12"
 app_file: app.py
 pinned: false
@@ -181,17 +181,17 @@ environment without a FRED key to exercise the Macro degraded-mode path.
 | Package | Pin | Reason |
 |---|---|---|
 | Python | **3.12** | pydub (via gradio) uses `audioop` removed in 3.13; pydantic v1 shims break on 3.14+ |
-| `gradio` | `== 4.44.1` | locks `gradio-client 1.3.0` |
-| `fastapi` | `>= 0.110, < 0.113` | starlette 0.38+ broke `TemplateResponse` signature |
-| `starlette` | `>= 0.37, < 0.38` | same |
-| `huggingface_hub` | `< 1.0` | 1.x removed `HfFolder` imported by gradio 4.44 |
-| `yfinance` | `>= 1.3.0, < 2.0` | Yahoo blocks default Python User-Agent on 0.2.x; 1.3.0 hard-requires `curl_cffi` for browser impersonation. Pulls `websockets 16.0` (pip warns about gradio-client 1.3.0's `websockets<13` constraint, but server-side runtime is unaffected). |
-| `curl_cffi` | `>= 0.7, < 1.0` | Required by yfinance 1.3 for browser-impersonated requests to Yahoo Finance. Without it, every `yf.download(...)` returns empty and the Price + Risk agents degrade. |
+| `gradio` | `>= 5.0, < 6.0` | gradio-client 1.14 (bundled with gradio 5.50) accepts `websockets <16, >=10`, which lets yfinance 1.3 (`websockets >= 13`) co-exist. gradio 4.44 pinned `gradio-client 1.3.0` (`websockets < 13`), making it unresolvable with current yfinance. |
+| `huggingface_hub` | `< 1.0` | 1.x removed `HfFolder` still imported by some langchain integrations; safer to stay on 0.x |
+| `yfinance` | `>= 1.3.0, < 2.0` | Yahoo Finance blocks default Python User-Agents on yfinance 0.2.x — every `yf.download(...)` returns empty. yfinance 1.3 routes all data fetches through `curl_cffi` to impersonate Chrome. |
+| `curl_cffi` | `>= 0.7, < 1.0` | Hard dependency of yfinance 1.3 (imported unconditionally at module load). Without it, the Price and Risk agents degrade. |
 
-`app.py` includes a monkey-patch at the top for a `gradio_client 1.3.0` bug where
-`_json_schema_to_python_type(True)` crashes with `TypeError: argument of type 'bool'
-is not iterable` (triggered by `gr.File` + `gr.State` introspection). The `audioop-lts`
-shim is retained in `requirements.txt` for environments that inadvertently run Python 3.13+.
+`app.py` includes a defensive monkey-patch at the top for a historic `gradio_client`
+bug where `_json_schema_to_python_type(True)` crashed with
+`TypeError: argument of type 'bool' is not iterable` (triggered by `gr.File` +
+`gr.State` introspection). The bug may be fixed in newer gradio_client; the patch
+is a no-op in that case. The `audioop-lts` shim is retained for environments that
+inadvertently run Python 3.13+.
 
 ## Disclaimer
 
