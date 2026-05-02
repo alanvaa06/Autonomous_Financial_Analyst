@@ -8,6 +8,7 @@ import pandas as pd
 import yfinance as yf
 
 from agents import degraded_signal, safe_parse_json
+from agents.yf_helpers import download_with_retry
 from state import AgentSignal
 
 
@@ -46,7 +47,7 @@ def _degraded(reason: str, raw: dict | None = None, error: str | None = None) ->
 def price_agent(state: dict, clients) -> dict:
     ticker = state["ticker"]
     try:
-        data = yf.download(ticker, period="90d", interval="1d", progress=False)
+        data = download_with_retry(ticker, period="90d", interval="1d")
         if data.empty or "Close" not in data.columns:
             return _degraded(f"No price data for {ticker}")
 

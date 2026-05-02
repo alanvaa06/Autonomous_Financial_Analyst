@@ -40,7 +40,7 @@ def test_price_agent_happy_path():
     fake_llm.invoke.return_value = MagicMock(content='{"signal": "BULLISH", "confidence": 0.7, "summary": "Trend up"}')
     fake_clients = MagicMock(reasoning=fake_llm)
 
-    with patch("agents.price_agent.yf.download", return_value=fake_df):
+    with patch("agents.price_agent.download_with_retry", return_value=fake_df):
         signals = price_agent({"ticker": "MSFT"}, fake_clients)
 
     sig = signals["agent_signals"][0]
@@ -53,7 +53,7 @@ def test_price_agent_happy_path():
 
 def test_price_agent_empty_data_degrades():
     fake_clients = MagicMock()
-    with patch("agents.price_agent.yf.download", return_value=pd.DataFrame()):
+    with patch("agents.price_agent.download_with_retry", return_value=pd.DataFrame()):
         signals = price_agent({"ticker": "ZZZZ"}, fake_clients)
     sig = signals["agent_signals"][0]
     assert sig["degraded"] is True

@@ -9,6 +9,7 @@ import pandas as pd
 import yfinance as yf
 
 from agents import degraded_signal, safe_parse_json
+from agents.yf_helpers import download_with_retry, last_close
 from state import AgentSignal
 
 RISK_FREE_RATE = 0.04
@@ -21,7 +22,7 @@ def _degraded(reason: str, raw: dict | None = None, error: str | None = None) ->
 def risk_agent(state: dict, clients) -> dict:
     ticker = state["ticker"]
     try:
-        data = yf.download(ticker, period="90d", interval="1d", progress=False)
+        data = download_with_retry(ticker, period="90d", interval="1d")
         if data.empty or "Close" not in data.columns:
             return _degraded(f"No price data for {ticker}")
 
@@ -35,11 +36,9 @@ def risk_agent(state: dict, clients) -> dict:
         max_dd = float(((cum - cum.cummax()) / cum.cummax()).min()) * 100
         sharpe = float((rets.mean() * 252 - RISK_FREE_RATE) / (rets.std() * np.sqrt(252)))
 
-        vix_df = yf.download("^VIX", period="5d", interval="1d", progress=False)
-        vix = (
-            round(float(vix_df["Close"].iloc[-1]), 2)
-            if not vix_df.empty else None
-        )
+        vix_df = download_with_retry("^VIX", period="5d", interval="1d")
+        vix_val = last_close(vix_df)
+        vix = round(vix_val, 2) if vix_val is not None else None
 
         info = {}
         try:

@@ -21,8 +21,13 @@ def test_risk_agent_happy():
     fake_ticker = MagicMock()
     fake_ticker.info = {"beta": 1.1, "shortRatio": 2.5}
 
-    with patch("agents.risk_agent.yf.download", side_effect=[_series(), pd.DataFrame({"Close": [22.1, 22.5, 21.9, 22.0, 22.3]})]), \
-         patch("agents.risk_agent.yf.Ticker", return_value=fake_ticker):
+    with patch(
+        "agents.risk_agent.download_with_retry",
+        side_effect=[
+            _series(),
+            pd.DataFrame({"Close": [22.1, 22.5, 21.9, 22.0, 22.3]}),
+        ],
+    ), patch("agents.risk_agent.yf.Ticker", return_value=fake_ticker):
         out = risk_agent({"ticker": "MSFT"}, clients)
 
     sig = out["agent_signals"][0]
@@ -33,7 +38,7 @@ def test_risk_agent_happy():
 
 def test_risk_agent_empty_data_degrades():
     clients = MagicMock()
-    with patch("agents.risk_agent.yf.download", return_value=pd.DataFrame()):
+    with patch("agents.risk_agent.download_with_retry", return_value=pd.DataFrame()):
         out = risk_agent({"ticker": "ZZZZ"}, clients)
     sig = out["agent_signals"][0]
     assert sig["degraded"] is True
