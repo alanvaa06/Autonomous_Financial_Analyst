@@ -170,3 +170,55 @@ def fetch_latest_10q(cik: str) -> Optional[Filing]:
 
 def fetch_latest_10k(cik: str) -> Optional[Filing]:
     return _latest_filing_of(cik, "10-K")
+
+
+# -- MD&A extraction -----------------------------------------------------------
+
+import re
+from bs4 import BeautifulSoup
+
+
+_MDNA_HEADING_RE = re.compile(
+    r"item\s*2\b.*?management.{0,30}discussion",
+    re.IGNORECASE | re.DOTALL,
+)
+_NEXT_ITEM_RE = re.compile(r"item\s*[3-9]\b", re.IGNORECASE)
+
+
+def extract_mdna_from_html(html: str, max_chars: int = 8000) -> str:
+    """Extract Item 2 (MD&A) text from a 10-Q filing's primary HTML document.
+
+    Strategy:
+      1. Strip tags via BeautifulSoup, preserving paragraph spacing.
+      2. Locate the Item 2 heading by regex.
+      3. Slice from there to the next Item N heading (3..9) or end of document.
+      4. Cap at `max_chars`.
+    """
+    if not html:
+        return ""
+    soup = BeautifulSoup(html, "html.parser")
+    text = soup.get_text(separator="\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    start = _MDNA_HEADING_RE.search(text)
+    if not start:
+        return ""
+
+    after = text[start.end():]
+    end_match = _NEXT_ITEM_RE.search(after)
+    body = after[: end_match.start()] if end_match else after
+    body = body.strip()
+    if len(body) > max_chars:
+        body = body[:max_chars]
+    return body
+
+
+def fetch_filing_html(filing: Filing) -> str:
+    """Download the primary document HTML for a Filing."""
+    return _get(filing.primary_url, headers={"Accept": "text/html"}).text
+
+
+def extract_mdna(filing: Filing, max_chars: int = 8000) -> str:
+    """Convenience: download and extract MD&A in one shot."""
+    return extract_mdna_from_html(fetch_filing_html(filing), max_chars=max_chars)
