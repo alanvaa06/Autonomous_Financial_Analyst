@@ -22,11 +22,8 @@ from typing import Deque, Dict, Iterable, Tuple
 
 # Action name → list of (window_seconds, max_requests)
 DEFAULT_LIMITS: Dict[str, Iterable[Tuple[int, int]]] = {
-    # Agent invocations are expensive (multi-tool LLM calls). Keep burst low.
-    "analyze": ((60, 3), (300, 8), (3600, 30)),
-    "rank": ((60, 2), (300, 5), (3600, 15)),
-    # PDF indexing is CPU-bound on the Space. Tight cap.
-    "upload": ((300, 3), (3600, 10)),
+    # One full multi-agent run per minute, capped per hour.
+    "analyze": ((60, 1), (3600, 20)),
 }
 
 
