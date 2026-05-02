@@ -21,6 +21,7 @@ def main(ticker: str) -> None:
     g = build_graph(clients, tavily_key=tavily_key, fred_key=fred_key)
     init = {
         "ticker": ticker, "company_name": None, "cik": None,
+        "price_history": None, "vix_history": None,
         "agent_signals": [], "retry_round": 0, "supervisor_review": None,
         "final_verdict": None, "final_conviction": None,
         "final_confidence": None, "final_reasoning": None, "final_report": None,

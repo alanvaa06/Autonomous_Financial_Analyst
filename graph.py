@@ -1,16 +1,21 @@
 """LangGraph wiring for MarketMind v2.
 
-  orchestrator -> [price, sentiment, fundamentals, macro, risk]  (parallel)
-                              |
-                           supervisor
-                              |
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-      retry_targets nonempty            approved or forced
-              │                               │
-       Send(target_agents)                synthesis
-              │                               │
-            (back to supervisor)              END
+  orchestrator -> data_prefetch -> [price, sentiment, fundamentals, macro, risk]
+                                                    |
+                                                supervisor
+                                                    |
+                                ┌───────────────────┴───────────────────┐
+                                ▼                                       ▼
+                       retry_targets nonempty                  approved or forced
+                                │                                       │
+                         Send(target_agents)                       synthesis
+                                │                                       │
+                              (back to supervisor)                      END
+
+The data_prefetch node downloads the ticker's 90-day OHLC and ^VIX once each
+and stores them in `state["price_history"]` / `state["vix_history"]`. Price
+and Risk read from there instead of issuing their own yfinance calls — Yahoo
+throttles HF Space IPs and parallel duplicate requests trip the limit.
 
 After one retry round, supervisor force-approves.
 """
@@ -22,6 +27,7 @@ from typing import Optional
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 
+from agents.data_prefetch import data_prefetch
 from agents.orchestrator import orchestrator
 from agents.price_agent import price_agent
 from agents.sentiment_agent import sentiment_agent
@@ -63,6 +69,7 @@ def build_graph(llm_clients, tavily_key: str, fred_key: Optional[str] = ""):
 
     g = StateGraph(MarketMindState)
     g.add_node("orchestrator", orchestrator)
+    g.add_node("data_prefetch", data_prefetch)
     g.add_node("price", _price)
     g.add_node("sentiment", _sentiment)
     g.add_node("fundamentals", _fundamentals)
@@ -73,8 +80,9 @@ def build_graph(llm_clients, tavily_key: str, fred_key: Optional[str] = ""):
     g.add_node("synthesis", _synthesis)
 
     g.set_entry_point("orchestrator")
+    g.add_edge("orchestrator", "data_prefetch")
     for name in SPECIALIST_NODES:
-        g.add_edge("orchestrator", name)
+        g.add_edge("data_prefetch", name)
         g.add_edge(name, "supervisor")
 
     def _after_supervisor(state) -> str:

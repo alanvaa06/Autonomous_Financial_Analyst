@@ -119,6 +119,7 @@ def analyze(state, ticker: str) -> Generator[Tuple[str, str], None, None]:
 
     init = {
         "ticker": ticker, "company_name": None, "cik": None,
+        "price_history": None, "vix_history": None,
         "agent_signals": [], "retry_round": 0, "supervisor_review": None,
         "final_verdict": None, "final_conviction": None,
         "final_confidence": None, "final_reasoning": None, "final_report": None,

@@ -47,8 +47,13 @@ def _degraded(reason: str, raw: dict | None = None, error: str | None = None) ->
 def price_agent(state: dict, clients) -> dict:
     ticker = state["ticker"]
     try:
-        data = download_with_retry(ticker, period="90d", interval="1d")
-        if data.empty or "Close" not in data.columns:
+        # Prefer the prefetched DataFrame populated by the data_prefetch node;
+        # fall back to a fresh download when running without the prefetch
+        # (older callers, unit tests).
+        data = state.get("price_history")
+        if data is None:
+            data = download_with_retry(ticker, period="90d", interval="1d")
+        if data is None or data.empty or "Close" not in data.columns:
             return _degraded(f"No price data for {ticker}")
 
         close = data["Close"].squeeze()

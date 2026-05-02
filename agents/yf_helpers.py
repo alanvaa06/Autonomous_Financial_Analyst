@@ -18,8 +18,8 @@ import time
 import pandas as pd
 import yfinance as yf
 
-DEFAULT_MAX_RETRIES = 2
-DEFAULT_BASE_BACKOFF = 2.0
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BASE_BACKOFF = 5.0
 
 
 def _is_rate_limit(exc: BaseException) -> bool:

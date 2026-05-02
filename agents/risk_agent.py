@@ -22,8 +22,12 @@ def _degraded(reason: str, raw: dict | None = None, error: str | None = None) ->
 def risk_agent(state: dict, clients) -> dict:
     ticker = state["ticker"]
     try:
-        data = download_with_retry(ticker, period="90d", interval="1d")
-        if data.empty or "Close" not in data.columns:
+        # Prefer the prefetched DataFrames; fall back to a fresh download when
+        # running without the prefetch node (unit tests, ad-hoc callers).
+        data = state.get("price_history")
+        if data is None:
+            data = download_with_retry(ticker, period="90d", interval="1d")
+        if data is None or data.empty or "Close" not in data.columns:
             return _degraded(f"No price data for {ticker}")
 
         close = data["Close"].squeeze()
@@ -36,8 +40,10 @@ def risk_agent(state: dict, clients) -> dict:
         max_dd = float(((cum - cum.cummax()) / cum.cummax()).min()) * 100
         sharpe = float((rets.mean() * 252 - RISK_FREE_RATE) / (rets.std() * np.sqrt(252)))
 
-        vix_df = download_with_retry("^VIX", period="5d", interval="1d")
-        vix_val = last_close(vix_df)
+        vix_df = state.get("vix_history")
+        if vix_df is None:
+            vix_df = download_with_retry("^VIX", period="5d", interval="1d")
+        vix_val = last_close(vix_df) if vix_df is not None else None
         vix = round(vix_val, 2) if vix_val is not None else None
 
         info = {}
