@@ -222,3 +222,41 @@ def fetch_filing_html(filing: Filing) -> str:
 def extract_mdna(filing: Filing, max_chars: int = 8000) -> str:
     """Convenience: download and extract MD&A in one shot."""
     return extract_mdna_from_html(fetch_filing_html(filing), max_chars=max_chars)
+
+
+# -- Aggregator ----------------------------------------------------------------
+
+
+@dataclass
+class EdgarBundle:
+    ticker: str
+    cik: str
+    company_name: str
+    latest_10q: Optional[Filing]
+    latest_10k: Optional[Filing]
+    xbrl_facts: dict
+    mdna_text: str
+    fetched_at: float = field(default_factory=_now)
+
+
+def build_edgar_bundle(ticker: str) -> EdgarBundle:
+    """One-shot bundle for the Fundamentals agent.
+
+    Raises TickerNotFound if SEC has no record. Other errors propagate from the
+    individual fetchers. The Fundamentals agent is responsible for catching
+    those and producing a degraded AgentSignal.
+    """
+    cik, name = resolve_ticker(ticker)
+    f10q = fetch_latest_10q(cik)
+    f10k = fetch_latest_10k(cik)
+    facts = fetch_company_facts(cik)
+    mdna = extract_mdna(f10q) if f10q else ""
+    return EdgarBundle(
+        ticker=ticker.strip().upper(),
+        cik=cik,
+        company_name=name,
+        latest_10q=f10q,
+        latest_10k=f10k,
+        xbrl_facts=facts,
+        mdna_text=mdna,
+    )
