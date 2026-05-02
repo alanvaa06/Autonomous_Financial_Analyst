@@ -91,3 +91,22 @@ def resolve_ticker(ticker: str) -> tuple[str, str]:
     cik, name = index[key]
     _CIK_CACHE[key] = (cik, name, _now())
     return cik, name
+
+
+# -- XBRL company facts --------------------------------------------------------
+
+# {cik: (data_dict, fetched_at)}
+_FACTS_CACHE: dict[str, tuple[dict, float]] = {}
+_FACTS_TTL_SECONDS = 6 * 3600
+
+
+def fetch_company_facts(cik: str) -> dict:
+    """Fetch XBRL company facts for a CIK. Cached per-process for 6h."""
+    cached = _FACTS_CACHE.get(cik)
+    if cached and (_now() - cached[1]) < _FACTS_TTL_SECONDS:
+        return cached[0]
+    url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
+    resp = _get(url)
+    data = resp.json()
+    _FACTS_CACHE[cik] = (data, _now())
+    return data
