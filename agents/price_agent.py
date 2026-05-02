@@ -7,7 +7,7 @@ import json
 import pandas as pd
 import yfinance as yf
 
-from agents import safe_parse_json
+from agents import degraded_signal, safe_parse_json
 from state import AgentSignal
 
 
@@ -40,14 +40,7 @@ def compute_bollinger_pctb(prices: pd.Series, period: int = 20) -> float:
 
 
 def _degraded(reason: str, raw: dict | None = None, error: str | None = None) -> dict:
-    return {
-        "agent_signals": [AgentSignal(
-            agent="price", signal="NEUTRAL", confidence=0.0,
-            summary=reason,
-            section_markdown=f"## Technical Analysis\n_Unavailable: {reason}_",
-            raw_data=raw or {}, degraded=True, error=error,
-        )]
-    }
+    return degraded_signal("price", "Technical Analysis", reason, raw=raw, error=error)
 
 
 def price_agent(state: dict, clients) -> dict:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import requests
 
-from agents import safe_parse_json
+from agents import degraded_signal, safe_parse_json
 from state import AgentSignal
 
 
@@ -81,12 +81,8 @@ def macro_agent(state: dict, clients, fred_key: str) -> dict:
         resp = clients.reasoning.invoke(prompt)
         out = safe_parse_json(resp.content)
     except Exception as exc:
-        return {"agent_signals": [AgentSignal(
-            agent="macro", signal="NEUTRAL", confidence=0.0,
-            summary="Macro LLM error",
-            section_markdown="## Macro Backdrop\n_LLM unavailable._",
-            raw_data=raw, degraded=True, error=str(exc)[:200],
-        )]}
+        return degraded_signal("macro", "Macro Backdrop", "Macro LLM error",
+                               raw=raw, error=str(exc)[:200])
 
     return {"agent_signals": [AgentSignal(
         agent="macro",

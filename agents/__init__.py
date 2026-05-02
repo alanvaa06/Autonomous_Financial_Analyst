@@ -1,31 +1,24 @@
 # agents/__init__.py
-"""Shared LLM clients + JSON helper for MarketMind v2 specialist agents.
+"""Shared LLM clients + JSON helper + degraded-signal helper for MarketMind v2.
 
 `build_llm_clients(anthropic_key)` is the only entry point. It returns a
 NamedTuple of two ChatAnthropic clients (Sonnet + Haiku) bound to the
 session-scoped key. No module-level client is ever constructed from
 `os.environ` on the public BYO-key path.
 
-A process-wide asyncio semaphore caps in-flight Anthropic requests at 3 per
-key to avoid 429s during fan-out. (LangGraph's superstep will start all 5
-specialist nodes concurrently; the semaphore queues two of them briefly.)
+`degraded_signal(...)` is the shared factory for the AgentSignal returned by
+every specialist when it cannot produce real output (missing key, no data,
+LLM error, etc.). One implementation, used by all five specialists.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
-import threading
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from langchain_anthropic import ChatAnthropic
 
-# Per-key concurrency semaphores. Keyed by the API key string; ephemeral,
-# session-scoped, GC'd when the LLMClients reference is dropped.
-_semaphores: dict[str, asyncio.Semaphore] = {}
-_semaphores_lock = threading.Lock()
-
-_MAX_CONCURRENT_PER_KEY = 3
+from state import AgentSignal
 
 REASONING_MODEL = "claude-sonnet-4-6"
 FAST_MODEL = "claude-haiku-4-5-20251001"
@@ -34,7 +27,6 @@ FAST_MODEL = "claude-haiku-4-5-20251001"
 class LLMClients(NamedTuple):
     reasoning: ChatAnthropic
     fast: ChatAnthropic
-    semaphore_key: str
 
 
 def build_llm_clients(anthropic_key: str) -> LLMClients:
@@ -53,17 +45,7 @@ def build_llm_clients(anthropic_key: str) -> LLMClients:
         temperature=0.1,
         max_tokens=800,
     )
-    return LLMClients(reasoning=reasoning, fast=fast, semaphore_key=anthropic_key)
-
-
-def get_semaphore(key: str) -> asyncio.Semaphore:
-    """Return the per-key semaphore, creating it lazily."""
-    with _semaphores_lock:
-        sem = _semaphores.get(key)
-        if sem is None:
-            sem = asyncio.Semaphore(_MAX_CONCURRENT_PER_KEY)
-            _semaphores[key] = sem
-        return sem
+    return LLMClients(reasoning=reasoning, fast=fast)
 
 
 def safe_parse_json(content: str) -> dict:
@@ -77,7 +59,6 @@ def safe_parse_json(content: str) -> dict:
 
     text = content.strip()
     if text.startswith("```"):
-        # Remove the opening fence (with optional language tag) and the closing fence.
         first_newline = text.find("\n")
         if first_newline == -1:
             raise json.JSONDecodeError("Empty fenced block", text, 0)
@@ -86,3 +67,28 @@ def safe_parse_json(content: str) -> dict:
             text = text.rstrip()[: -3]
         text = text.strip()
     return json.loads(text)
+
+
+def degraded_signal(
+    agent: str,
+    section_title: str,
+    reason: str,
+    raw: Optional[dict] = None,
+    error: Optional[str] = None,
+) -> dict:
+    """Construct the standard degraded AgentSignal envelope.
+
+    Returns the LangGraph node-update shape: `{"agent_signals": [AgentSignal]}`.
+    Every specialist uses this when it cannot produce a real signal — missing
+    key, no data, LLM error, or any other graceful-degradation case.
+    """
+    return {"agent_signals": [AgentSignal(
+        agent=agent,
+        signal="NEUTRAL",
+        confidence=0.0,
+        summary=reason,
+        section_markdown=f"## {section_title}\n_Unavailable: {reason}_",
+        raw_data=raw or {},
+        degraded=True,
+        error=error,
+    )]}

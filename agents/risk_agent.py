@@ -8,19 +8,14 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from agents import safe_parse_json
+from agents import degraded_signal, safe_parse_json
 from state import AgentSignal
 
 RISK_FREE_RATE = 0.04
 
 
 def _degraded(reason: str, raw: dict | None = None, error: str | None = None) -> dict:
-    return {"agent_signals": [AgentSignal(
-        agent="risk", signal="NEUTRAL", confidence=0.0,
-        summary=reason,
-        section_markdown=f"## Risk Profile\n_Unavailable: {reason}_",
-        raw_data=raw or {}, degraded=True, error=error,
-    )]}
+    return degraded_signal("risk", "Risk Profile", reason, raw=raw, error=error)
 
 
 def risk_agent(state: dict, clients) -> dict:

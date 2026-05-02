@@ -4,17 +4,12 @@ from __future__ import annotations
 
 from tavily import TavilyClient
 
-from agents import safe_parse_json
+from agents import degraded_signal, safe_parse_json
 from state import AgentSignal
 
 
 def _degraded(reason: str, raw: dict | None = None, error: str | None = None) -> dict:
-    return {"agent_signals": [AgentSignal(
-        agent="sentiment", signal="NEUTRAL", confidence=0.0,
-        summary=reason,
-        section_markdown=f"## News & Sentiment\n_Unavailable: {reason}_",
-        raw_data=raw or {}, degraded=True, error=error,
-    )]}
+    return degraded_signal("sentiment", "News & Sentiment", reason, raw=raw, error=error)
 
 
 def sentiment_agent(state: dict, clients, tavily_key: str) -> dict:

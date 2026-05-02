@@ -65,3 +65,31 @@ def test_supervisor_sanity_violation_rsi():
     state = {"agent_signals": [bad, _sig("sentiment"), _sig("fundamentals"), _sig("macro"), _sig("risk")], "retry_round": 0}
     out = supervisor_agent(state)
     assert "price" in out["supervisor_review"]["retry_targets"]
+
+
+def test_supervisor_skips_intentional_degradation():
+    # FU3: agent intentionally degraded (degraded=True, error=None) with a
+    # short section_markdown — re-running won't help (e.g. FRED key still absent),
+    # so supervisor should NOT flag for retry.
+    state = {"agent_signals": [
+        _sig("price"),
+        _sig("macro", confidence=0.0, degraded=True,
+             section_markdown="## Macro Backdrop\n_Unavailable: No FRED key_"),
+        _sig("sentiment"), _sig("fundamentals"), _sig("risk"),
+    ], "retry_round": 0}
+    out = supervisor_agent(state)
+    assert "macro" not in out["supervisor_review"]["retry_targets"]
+    assert out["supervisor_review"]["approved"] is True
+
+
+def test_supervisor_still_flags_hard_error():
+    # The intentional-degradation short-circuit must NOT swallow real errors.
+    # When degraded=True AND error is set, the agent failed and should be retried.
+    state = {"agent_signals": [
+        _sig("price"),
+        _sig("macro", confidence=0.0, degraded=True, error="boom",
+             section_markdown="## Macro Backdrop\nshort"),
+        _sig("sentiment"), _sig("fundamentals"), _sig("risk"),
+    ], "retry_round": 0}
+    out = supervisor_agent(state)
+    assert "macro" in out["supervisor_review"]["retry_targets"]

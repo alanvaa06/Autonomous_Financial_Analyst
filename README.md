@@ -114,11 +114,14 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
+# Optional — for running the test suite locally:
+pip install -r requirements-dev.txt
+
 cp .env.example .env   # then paste your keys
 ALLOW_ENV_KEYS=1 python app.py
 ```
 
-Open **http://127.0.0.1:7860**.
+Open **http://127.0.0.1:7860**. Run the test suite with `pytest tests/ -v`.
 
 ## API keys
 

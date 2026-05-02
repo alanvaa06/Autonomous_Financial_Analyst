@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from agents.synthesis_agent import (
+    _section_for,
     compute_verdict_and_conviction,
     label_for,
     synthesis_agent,
@@ -69,6 +70,52 @@ def test_strong_sell_consensus():
     ]
     v, c, _ = compute_verdict_and_conviction(sigs)
     assert v == "SELL" and c == "STRONG"
+
+
+def test_section_for_replaces_only_first_heading_line():
+    # FU7 regression: agent's first ## heading is replaced with the canonical
+    # section title, but any subheadings (## Subsection) inside the body must
+    # survive intact.
+    sigs = [{
+        "agent": "price", "signal": "BULLISH", "confidence": 0.7,
+        "summary": "ok",
+        "section_markdown": (
+            "## Original Heading\n"
+            "First paragraph of body.\n\n"
+            "### Subsection A\n"
+            "Detail A.\n\n"
+            "## Subsection B\n"
+            "Detail B."
+        ),
+        "raw_data": {}, "degraded": False, "error": None,
+    }]
+    out = _section_for(sigs, "price")
+    assert out.startswith("## Technical Analysis\n")
+    # Original heading is gone, body is intact, subheadings survive.
+    assert "Original Heading" not in out
+    assert "First paragraph of body." in out
+    assert "### Subsection A" in out
+    assert "## Subsection B" in out
+    assert "Detail A." in out
+    assert "Detail B." in out
+
+
+def test_section_for_handles_missing_heading():
+    sigs = [{
+        "agent": "macro", "signal": "NEUTRAL", "confidence": 0.4,
+        "summary": "ok",
+        "section_markdown": "Plain text body without a leading heading.",
+        "raw_data": {}, "degraded": False, "error": None,
+    }]
+    out = _section_for(sigs, "macro")
+    assert out.startswith("## Macro Backdrop\n")
+    assert "Plain text body without a leading heading." in out
+
+
+def test_section_for_handles_missing_agent():
+    out = _section_for([], "risk")
+    assert out.startswith("## Risk Profile\n")
+    assert "_Agent did not run._" in out
 
 
 def test_synthesis_agent_assembles_report():
