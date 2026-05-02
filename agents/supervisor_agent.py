@@ -1,10 +1,13 @@
 """Light-QA supervisor. Cannot rewrite agent content or override verdicts.
 
 Allowed actions:
-  1. Flag agents whose output appears broken (zero confidence + degraded, errors).
+  1. Flag agents whose output appears broken (hard error from agent code).
   2. Flag direct contradictions (BULLISH vs BEARISH, both confidence ≥ 0.7).
-  3. Flag short / empty sections (< 200 chars of section_markdown).
-  4. Flag obvious data sanity violations.
+  3. Flag short / empty sections (< 200 chars of section_markdown), unless
+     the agent intentionally degraded (degraded=True AND error is None) —
+     re-running will not produce a longer section in those cases.
+  4. Flag obvious data sanity violations (only when the agent did produce
+     real output; intentional-degradation paths skip this check).
 
 The conditional edge after the supervisor reads `supervisor_review.retry_targets`.
 On retry_round >= 1, the supervisor force-approves regardless.
@@ -41,10 +44,20 @@ def supervisor_agent(state: dict) -> dict:
 
     critiques: dict[str, str] = {}
 
-    # 1. broken outputs
+    # 1. broken outputs + section/sanity checks (skipped on intentional degradation)
     for s in signals:
-        if s.get("error") or (s.get("degraded") and float(s.get("confidence", 0.0)) == 0.0):
-            critiques.setdefault(s["agent"], "Hard error or zero-confidence degraded output.")
+        intentional_degradation = bool(s.get("degraded")) and not s.get("error")
+
+        if s.get("error"):
+            critiques.setdefault(s["agent"], "Hard error from agent.")
+
+        # FU3: re-running an intentionally-degraded agent (e.g., FRED key absent,
+        # ticker not in SEC universe) won't change anything — short-circuit the
+        # short-section and sanity flags so the supervisor doesn't burn a retry
+        # round on a guaranteed no-op.
+        if intentional_degradation:
+            continue
+
         if len((s.get("section_markdown") or "")) < MIN_SECTION_CHARS:
             critiques.setdefault(s["agent"], "Section narrative is missing or too short.")
         for issue in _sanity_violations(s.get("agent", ""), s.get("raw_data", {}) or {}):

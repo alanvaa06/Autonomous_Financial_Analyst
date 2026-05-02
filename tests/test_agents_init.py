@@ -30,3 +30,26 @@ def test_build_llm_clients_returns_two_models():
 def test_build_llm_clients_rejects_empty_key():
     with pytest.raises(ValueError, match="anthropic"):
         build_llm_clients("")
+
+
+def test_degraded_signal_shape():
+    from agents import degraded_signal
+    out = degraded_signal("price", "Technical Analysis", "No data for ZZZZ")
+    assert "agent_signals" in out
+    sig = out["agent_signals"][0]
+    assert sig["agent"] == "price"
+    assert sig["signal"] == "NEUTRAL"
+    assert sig["confidence"] == 0.0
+    assert sig["degraded"] is True
+    assert sig["error"] is None
+    assert sig["section_markdown"].startswith("## Technical Analysis")
+    assert "No data for ZZZZ" in sig["section_markdown"]
+    assert sig["raw_data"] == {}
+
+
+def test_degraded_signal_with_raw_and_error():
+    from agents import degraded_signal
+    out = degraded_signal("risk", "Risk Profile", "boom", raw={"foo": 1}, error="trace")
+    sig = out["agent_signals"][0]
+    assert sig["raw_data"] == {"foo": 1}
+    assert sig["error"] == "trace"

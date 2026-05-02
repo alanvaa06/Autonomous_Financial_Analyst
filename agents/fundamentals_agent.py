@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from agents import safe_parse_json
+from agents import degraded_signal, safe_parse_json
 from edgar import EdgarBundle, TickerNotFound, build_edgar_bundle
 from state import AgentSignal
 
@@ -60,12 +60,7 @@ def yoy_delta_pct(current: float, prior: float) -> Optional[float]:
 
 
 def _degraded(reason: str, raw: dict | None = None, error: str | None = None) -> dict:
-    return {"agent_signals": [AgentSignal(
-        agent="fundamentals", signal="NEUTRAL", confidence=0.0,
-        summary=reason,
-        section_markdown=f"## Fundamentals\n_Unavailable: {reason}_",
-        raw_data=raw or {}, degraded=True, error=error,
-    )]}
+    return degraded_signal("fundamentals", "Fundamentals", reason, raw=raw, error=error)
 
 
 def fundamentals_agent(state: dict, clients) -> dict:
