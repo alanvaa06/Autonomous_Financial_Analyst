@@ -185,7 +185,8 @@ environment without a FRED key to exercise the Macro degraded-mode path.
 | `fastapi` | `>= 0.110, < 0.113` | starlette 0.38+ broke `TemplateResponse` signature |
 | `starlette` | `>= 0.37, < 0.38` | same |
 | `huggingface_hub` | `< 1.0` | 1.x removed `HfFolder` imported by gradio 4.44 |
-| `yfinance` | `>= 0.2.40, < 0.2.50` | ≥ 0.2.50 requires `websockets >= 13`, conflicts with `gradio-client 1.3` |
+| `yfinance` | `>= 1.3.0, < 2.0` | Yahoo blocks default Python User-Agent on 0.2.x; 1.3.0 hard-requires `curl_cffi` for browser impersonation. Pulls `websockets 16.0` (pip warns about gradio-client 1.3.0's `websockets<13` constraint, but server-side runtime is unaffected). |
+| `curl_cffi` | `>= 0.7, < 1.0` | Required by yfinance 1.3 for browser-impersonated requests to Yahoo Finance. Without it, every `yf.download(...)` returns empty and the Price + Risk agents degrade. |
 
 `app.py` includes a monkey-patch at the top for a `gradio_client 1.3.0` bug where
 `_json_schema_to_python_type(True)` crashes with `TypeError: argument of type 'bool'
