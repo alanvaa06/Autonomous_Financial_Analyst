@@ -132,7 +132,10 @@ def test_synthesis_agent_assembles_report():
         "agent_signals": sigs, "supervisor_review": review,
     }
     fake_llm = MagicMock()
-    fake_llm.invoke.return_value = MagicMock(content='{"reasoning": "Three sentences of integrated reasoning that explain why the call holds together across price, sentiment, and fundamentals."}')
+    fake_llm.invoke.return_value = MagicMock(content=(
+        '{"reasoning": "Three sentences of integrated reasoning that explain why the call holds together across price, sentiment, and fundamentals.",'
+        ' "key_drivers": [], "dissenting_view": "", "watch_items": []}'
+    ))
     clients = MagicMock(reasoning=fake_llm)
 
     out = synthesis_agent(state, clients)
@@ -146,3 +149,35 @@ def test_synthesis_agent_assembles_report():
         "Risk Profile", "Synthesis & Final Verdict", "Disclaimer",
     ):
         assert header in report
+
+
+def test_synthesis_emits_key_drivers_and_watch_items():
+    sigs = [
+        _s("price", "BULLISH", 0.7),
+        _s("sentiment", "BULLISH", 0.6),
+        _s("fundamentals", "BULLISH", 0.65),
+        _s("macro", "NEUTRAL", 0.5),
+        _s("risk", "NEUTRAL", 0.55),
+    ]
+    review = {"approved": True, "critiques": {}, "retry_targets": [],
+              "notes": "Data quality: all sections complete."}
+    state = {"ticker": "MSFT", "company_name": "Microsoft Corp",
+             "agent_signals": sigs, "supervisor_review": review}
+    fake_llm = MagicMock()
+    fake_llm.invoke.return_value = MagicMock(content=(
+        '{"reasoning": "Three specialists support: Price, Sentiment, Fundamentals.", '
+        '"key_drivers": ["Fundamentals: op margin +220 bps", '
+        '"Price: trend confirmation", "Sentiment: 8/12 positive"], '
+        '"dissenting_view": "Macro headwind reverses if Fed cuts next meeting.", '
+        '"watch_items": ["Next CPI print", "Q3 cloud growth"]}'
+    ))
+    clients = MagicMock(reasoning=fake_llm)
+    out = synthesis_agent(state, clients)
+    assert out["key_drivers"] == [
+        "Fundamentals: op margin +220 bps",
+        "Price: trend confirmation",
+        "Sentiment: 8/12 positive",
+    ]
+    assert "Next CPI print" in out["watch_items"]
+    assert "What to Watch" in out["final_report"]
+    assert "Dissenting view" in out["final_report"]

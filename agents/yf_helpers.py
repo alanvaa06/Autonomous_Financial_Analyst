@@ -70,4 +70,8 @@ def last_close(df: pd.DataFrame) -> float | None:
     if df is None or df.empty or "Close" not in df.columns:
         return None
     close = df["Close"].squeeze()
-    return float(close.iloc[-1])
+    # squeeze() collapses a 1-element Series to a numpy scalar; guard with
+    # an explicit Series check so .iloc[-1] is only called when available.
+    if isinstance(close, pd.Series):
+        return float(close.iloc[-1])
+    return float(close)

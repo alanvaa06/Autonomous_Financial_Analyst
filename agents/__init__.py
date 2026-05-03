@@ -14,8 +14,10 @@ LLM error, etc.). One implementation, used by all five specialists.
 from __future__ import annotations
 
 import json
-from typing import NamedTuple, Optional
+from dataclasses import dataclass
+from typing import Callable, NamedTuple, Optional
 
+from anthropic import Anthropic
 from langchain_anthropic import ChatAnthropic
 
 from state import AgentSignal
@@ -92,3 +94,144 @@ def degraded_signal(
         degraded=True,
         error=error,
     )]}
+
+
+# ---------------------------------------------------------------------------
+# v2.1: Tool-use loop helpers
+# ---------------------------------------------------------------------------
+
+DEFAULT_MAX_ITERATIONS = 3
+
+
+@dataclass
+class ToolDef:
+    """A single on-demand tool available to a specialist agent."""
+    name: str
+    description: str
+    input_schema: dict
+    handler: Callable[[dict], object]   # local executor; returns JSON-serializable
+
+    def to_anthropic(self) -> dict:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema,
+        }
+
+
+def _content_blocks_text(blocks) -> str:
+    """Concatenate text from a list of TextBlock / dicts."""
+    out = []
+    for b in blocks:
+        text = getattr(b, "text", None)
+        if text is None and isinstance(b, dict):
+            text = b.get("text")
+        if text:
+            out.append(text)
+    return "".join(out)
+
+
+def _format_tool_result(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, default=str)
+    except Exception as exc:
+        return json.dumps({"error": f"unserializable: {exc!s}"})
+
+
+def run_with_tools(
+    api_key: str,
+    *,
+    system_prompt: str,
+    user_prompt: str,
+    tools: list[ToolDef],
+    model: str = REASONING_MODEL,
+    max_iterations: int = DEFAULT_MAX_ITERATIONS,
+    max_tokens: int = 1500,
+    temperature: float = 0.1,
+) -> dict:
+    """Run a Claude tool-use loop with hard iteration cap and prompt caching.
+
+    The system prompt block is sent with cache_control on every turn so that
+    Anthropic can serve subsequent turns from cache (5-minute TTL).
+
+    Returns the parsed JSON dict from the final text response.
+
+    Raises ValueError if the model never produces a parseable JSON text block
+    after `max_iterations + 1` attempts.
+    """
+    if not api_key:
+        raise ValueError("api_key is required")
+
+    client = Anthropic(api_key=api_key)
+    tool_specs = [t.to_anthropic() for t in tools]
+    handlers = {t.name: t.handler for t in tools}
+
+    messages: list[dict] = [{"role": "user", "content": user_prompt}]
+
+    for iteration in range(max_iterations + 1):
+        # Force final text on the LAST iteration (no more tool calls allowed).
+        kwargs = dict(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=list(messages),
+        )
+        if iteration < max_iterations and tool_specs:
+            kwargs["tools"] = tool_specs
+        # Final iteration: omit `tools` entirely (instead of tool_choice="none")
+        # so the model has no schema to call against and must emit text. This
+        # also yields a smaller cache key for the forced-text turn.
+
+        resp = client.messages.create(**kwargs)
+
+        # Append assistant turn to message history.
+        messages.append({"role": "assistant", "content": resp.content})
+
+        # If stop_reason is tool_use, execute every tool_use block in this turn
+        # and feed all results back as a single user message.
+        if resp.stop_reason == "tool_use" and iteration < max_iterations:
+            tool_results = []
+            for block in resp.content:
+                if getattr(block, "type", None) != "tool_use":
+                    continue
+                name = block.name
+                args = block.input or {}
+                try:
+                    handler = handlers[name]
+                    result = handler(args)
+                    result_text = _format_tool_result(result)
+                except KeyError:
+                    result_text = json.dumps({"error": f"unknown tool {name}"})
+                except Exception as exc:
+                    result_text = json.dumps({"error": str(exc)[:200]})
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result_text,
+                })
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        # Otherwise, parse the final text and return.
+        text = _content_blocks_text(resp.content)
+        if not text:
+            continue
+        try:
+            return safe_parse_json(text)
+        except Exception:
+            # If parse fails on this turn, loop will retry up to max_iterations.
+            continue
+
+    raise ValueError(
+        f"run_with_tools: model did not produce parseable JSON after "
+        f"{max_iterations + 1} iterations"
+    )
