@@ -1,4 +1,8 @@
-"""Synthesis: deterministic verdict math + LLM reasoning + report assembly."""
+"""Synthesis (v2.1): deterministic verdict math + CoT LLM reasoning + report assembly.
+
+LLM emits 4 fields: reasoning, key_drivers, dissenting_view, watch_items.
+Verdict / conviction / confidence remain deterministic upstream.
+"""
 
 from __future__ import annotations
 
@@ -30,6 +34,45 @@ LABEL_TABLE: dict[tuple[str, str], str] = {
     ("SELL", "STANDARD"): "Sell",
     ("SELL", "CAUTIOUS"): "Cautious Sell",
 }
+
+
+PERSONA = (
+    "You are the Chief Investment Officer and Director of Research at a "
+    "multi-strategy fund. You chair the daily investment committee — your "
+    "job is to integrate five specialist signals into a single coherent "
+    "thesis, name the strongest argument for the call AND the strongest "
+    "argument against, and identify the leading indicators that would force "
+    "a re-evaluation. You never overstate confidence and you always make "
+    "dissent visible."
+)
+
+COT = """
+The verdict, conviction, and confidence are already decided upstream from
+specialist signals — you write the NARRATIVE.
+
+Reason step-by-step:
+1. Consensus — which agents agree with the verdict? At what avg confidence?
+2. Dissent — which agents disagree? Why? (Cite their summary)
+3. Strongest single argument FOR — name the specialist + metric
+4. Strongest single argument AGAINST — name the specialist + metric
+5. Integrated thesis — 3-5 sentences referencing ≥3 specialists by name
+6. Key drivers — 2-4 phrases, each "Specialist: <metric/observation>"
+7. Dissenting view — one sentence: what condition flips the call
+8. Watch items — 2-3 leading indicators (rate prints, earnings dates,
+   VIX thresholds, segment growth) that would force a re-rating
+
+Output JSON only.
+""".strip()
+
+OUTPUT_SCHEMA = """
+Respond with a single JSON object (no markdown fences) with EXACTLY these keys:
+{
+  "reasoning": "3-5 sentences (80-150 words) referencing ≥3 specialists by name",
+  "key_drivers": ["Specialist: metric/observation", ...],   // 2-4 entries, each ≤15 words
+  "dissenting_view": "one sentence ≤25 words: what condition flips the call",
+  "watch_items": ["leading indicator", ...]                  // 2-3 entries, each ≤20 words
+}
+""".strip()
 
 
 def label_for(verdict: Verdict, conviction: Conviction) -> str:
@@ -78,7 +121,6 @@ def _section_for(signals: list[dict], agent: str) -> str:
         if s.get("agent") == agent:
             md = (s.get("section_markdown") or "").strip()
             if md and md.startswith("## "):
-                # Extract content after the first heading (which may be agent name)
                 lines = md.split("\n", 1)
                 content = lines[1] if len(lines) > 1 else ""
                 return f"## {SECTION_TITLES[agent]}\n{content.strip()}"
@@ -112,20 +154,31 @@ def synthesis_agent(state: dict, clients) -> dict:
         for s in signals
     )
 
-    prompt = (
-        f"You are the chief investment strategist. The deterministic vote across five specialists "
-        f"yielded **{label}** (verdict={verdict}, conviction={conviction}, confidence={confidence:.2f}) "
-        f"for {ticker} ({company}).\n\n"
+    user_prompt = (
+        f"Ticker: {ticker} ({company})\n"
+        f"Deterministic verdict: **{label}** "
+        f"(verdict={verdict}, conviction={conviction}, confidence={confidence:.2f})\n\n"
         f"Specialist rollup:\n{rollup}\n\n"
         f"Supervisor notes: {review.get('notes', '')}\n\n"
-        "Write 3–5 sentences of synthesis explaining why the call holds together (or why conflicts "
-        "leave it cautious). Reference at least two specialists by name. Do NOT change the verdict. "
-        "Respond with JSON ONLY: {\"reasoning\": \"...\"}"
+        "Run your 8-step chain of thought, then output the final JSON."
     )
+
+    system_prompt = "\n\n".join([PERSONA, COT, OUTPUT_SCHEMA])
+
+    reasoning = ""
+    key_drivers: list = []
+    dissenting_view = ""
+    watch_items: list = []
     try:
-        resp = clients.reasoning.invoke(prompt)
+        resp = clients.reasoning.invoke([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ])
         out = safe_parse_json(resp.content)
-        reasoning = out["reasoning"]
+        reasoning = out.get("reasoning") or ""
+        key_drivers = list(out.get("key_drivers") or [])
+        dissenting_view = out.get("dissenting_view") or ""
+        watch_items = list(out.get("watch_items") or [])
     except Exception as exc:
         reasoning = (
             f"Synthesis LLM call failed ({str(exc)[:100]}). "
@@ -134,6 +187,11 @@ def synthesis_agent(state: dict, clients) -> dict:
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    drivers_block = (
+        "\n\n**Key drivers:**\n" + "\n".join(f"- {d}" for d in key_drivers)
+        if key_drivers else ""
+    )
+
     exec_summary = (
         f"# {ticker} — {company}\n\n"
         f"_Generated {timestamp}_\n\n"
@@ -141,8 +199,21 @@ def synthesis_agent(state: dict, clients) -> dict:
         f"**Verdict: {label}** · Confidence: {confidence * 100:.0f}%\n\n"
         f"- Verdict: {verdict}\n"
         f"- Conviction: {conviction}\n"
-        f"- {review.get('notes', '')}\n"
+        f"- {review.get('notes', '')}"
+        f"{drivers_block}\n"
     )
+
+    synthesis_block = (
+        f"## Synthesis & Final Verdict\n"
+        f"**{label}** — Confidence {confidence * 100:.0f}%.\n\n"
+        f"{reasoning}"
+    )
+    if dissenting_view:
+        synthesis_block += f"\n\n_Dissenting view: {dissenting_view}_"
+    if watch_items:
+        synthesis_block += "\n\n### What to Watch\n" + "\n".join(
+            f"- {w}" for w in watch_items
+        )
 
     sections = [
         exec_summary,
@@ -151,7 +222,7 @@ def synthesis_agent(state: dict, clients) -> dict:
         _section_for(signals, "fundamentals"),
         _section_for(signals, "macro"),
         _section_for(signals, "risk"),
-        f"## Synthesis & Final Verdict\n**{label}** — Confidence {confidence * 100:.0f}%.\n\n{reasoning}",
+        synthesis_block,
         _disclaimer_block(),
     ]
     final_report = "\n\n".join(sections)
@@ -162,4 +233,7 @@ def synthesis_agent(state: dict, clients) -> dict:
         "final_confidence": confidence,
         "final_reasoning": reasoning,
         "final_report": final_report,
+        "key_drivers": key_drivers,
+        "dissenting_view": dissenting_view,
+        "watch_items": watch_items,
     }
