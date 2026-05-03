@@ -38,7 +38,7 @@ class AgentSignal(TypedDict, total=False):
 
     # v2.1 generic additions (every specialist populates these when not degraded)
     key_metrics: Optional[dict]
-    flags: Optional[list]
+    flags: Optional[list[str]]
 
     # v2.1 agent-specific additions
     regime: Optional[str]                # price (trending_up/...), macro (risk-on/...)
