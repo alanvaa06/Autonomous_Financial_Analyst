@@ -119,10 +119,11 @@ def analyze(state, ticker: str) -> Generator[Tuple[str, str], None, None]:
 
     init = {
         "ticker": ticker, "company_name": None, "cik": None,
-        "price_history": None, "vix_history": None,
+        "price_history": None, "vix_history": None, "edgar_bundle": None,
         "agent_signals": [], "retry_round": 0, "supervisor_review": None,
         "final_verdict": None, "final_conviction": None,
         "final_confidence": None, "final_reasoning": None, "final_report": None,
+        "key_drivers": None, "dissenting_view": None, "watch_items": None,
     }
 
     status_map = {n: "pending" for n in SPECIALISTS}
@@ -177,7 +178,7 @@ with gr.Blocks(title="MarketMind v2", css=CSS) as demo:
 
     with gr.Row():
         ticker_box = gr.Textbox(label="Ticker", placeholder="MSFT", scale=3)
-        analyze_btn = gr.Button("Analyze (~$0.30/run on BYO key)", variant="primary", scale=1)
+        analyze_btn = gr.Button("Analyze (~$0.50/run on BYO key)", variant="primary", scale=1)
 
     pills = gr.HTML()
     report = gr.Markdown(elem_classes="report")
