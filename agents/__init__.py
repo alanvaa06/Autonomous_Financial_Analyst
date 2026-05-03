@@ -14,8 +14,10 @@ LLM error, etc.). One implementation, used by all five specialists.
 from __future__ import annotations
 
 import json
-from typing import NamedTuple, Optional
+from dataclasses import dataclass
+from typing import Callable, NamedTuple, Optional
 
+from anthropic import Anthropic
 from langchain_anthropic import ChatAnthropic
 
 from state import AgentSignal
@@ -97,11 +99,6 @@ def degraded_signal(
 # ---------------------------------------------------------------------------
 # v2.1: Tool-use loop helpers
 # ---------------------------------------------------------------------------
-
-from dataclasses import dataclass
-from typing import Callable
-
-from anthropic import Anthropic
 
 DEFAULT_MAX_ITERATIONS = 3
 
@@ -190,7 +187,9 @@ def run_with_tools(
         )
         if iteration < max_iterations and tool_specs:
             kwargs["tools"] = tool_specs
-        # else: omit tools entirely so Claude must produce text.
+        # Final iteration: omit `tools` entirely (instead of tool_choice="none")
+        # so the model has no schema to call against and must emit text. This
+        # also yields a smaller cache key for the forced-text turn.
 
         resp = client.messages.create(**kwargs)
 
