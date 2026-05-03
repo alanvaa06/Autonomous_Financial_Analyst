@@ -93,3 +93,33 @@ def test_supervisor_still_flags_hard_error():
     ], "retry_round": 0}
     out = supervisor_agent(state)
     assert "macro" in out["supervisor_review"]["retry_targets"]
+
+
+def test_supervisor_reads_key_metrics_for_rsi_sanity():
+    s = _sig("price")
+    s["key_metrics"] = {"rsi": 150.0}
+    state = {"agent_signals": [s, _sig("sentiment"), _sig("fundamentals"),
+                               _sig("macro"), _sig("risk")], "retry_round": 0}
+    out = supervisor_agent(state)
+    assert "price" in out["supervisor_review"]["retry_targets"]
+
+
+def test_supervisor_flags_implausible_roe():
+    fund = _sig("fundamentals")
+    fund["key_metrics"] = {"roe_pct": 350.0}
+    state = {"agent_signals": [_sig("price"), _sig("sentiment"), fund,
+                               _sig("macro"), _sig("risk")], "retry_round": 0}
+    out = supervisor_agent(state)
+    assert "fundamentals" in out["supervisor_review"]["retry_targets"]
+
+
+def test_supervisor_cross_signal_fundamentals_vs_macro():
+    fund = _sig("fundamentals", confidence=0.7)
+    fund["key_metrics"] = {"eps_yoy_pct": -25.0}
+    macro = _sig("macro", confidence=0.6)
+    macro["regime"] = "risk-on"
+    macro["ticker_exposure"] = "high"
+    state = {"agent_signals": [_sig("price"), _sig("sentiment"), fund, macro,
+                               _sig("risk")], "retry_round": 0}
+    out = supervisor_agent(state)
+    assert "macro" in out["supervisor_review"]["retry_targets"]
