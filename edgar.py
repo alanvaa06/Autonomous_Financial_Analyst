@@ -112,6 +112,75 @@ def fetch_company_facts(cik: str) -> dict:
     return data
 
 
+# -- Revenue tag fallback helpers ----------------------------------------------
+
+REVENUE_TAGS: tuple[str, ...] = (
+    "RevenueFromContractWithCustomerExcludingAssessedTax",  # ASC 606 standard, post-2018
+    "Revenues",                                              # legacy generic
+    "RevenueFromContractWithCustomerIncludingAssessedTax",   # ASC 606 with tax
+    "SalesRevenueNet",                                       # pre-ASC 606 retail
+)
+VALID_FP = frozenset({"Q1", "Q2", "Q3", "FY"})
+
+
+def latest_revenue_observations(facts: dict, *, periods: int = 8) -> tuple[Optional[str], list[dict]]:
+    """Resolve revenue observations via tag-fallback chain.
+
+    Walks REVENUE_TAGS in priority order and returns the first tag whose
+    USD observations include at least 2 clean entries (form in {10-Q, 10-K},
+    fp in VALID_FP). Sort key is (end DESC, filed DESC) so the most recent
+    period wins and restated values supersede originals when both forms
+    qualify.
+
+    Returns (tag_used, observations) capped at `periods`, or (None, []) if
+    no tag has at least 2 clean observations.
+    """
+    g = (facts or {}).get("facts", {}).get("us-gaap", {})
+    for tag in REVENUE_TAGS:
+        obs = g.get(tag, {}).get("units", {}).get("USD") or []
+        clean = [
+            o for o in obs
+            if o.get("form") in ("10-Q", "10-K") and o.get("fp") in VALID_FP
+        ]
+        clean.sort(
+            key=lambda o: (o.get("end", ""), o.get("filed", "")),
+            reverse=True,
+        )
+        if len(clean) >= 2:
+            return tag, clean[:periods]
+    return None, []
+
+
+def yoy_revenue_pct(observations: list[dict]) -> Optional[float]:
+    """Compute YoY revenue percent from a list returned by `latest_revenue_observations`.
+
+    Pairs the newest observation with a prior observation of the same `fp`
+    and an `end` year exactly one year earlier. Returns None when fewer
+    than 2 observations are available, or when no matching prior is found.
+    """
+    if len(observations) < 2:
+        return None
+    latest = observations[0]
+    fp = latest.get("fp")
+    end = latest.get("end", "")
+    if not fp or len(end) < 10:
+        return None
+    target_year = str(int(end[:4]) - 1)
+    prior = next(
+        (
+            o for o in observations[1:]
+            if o.get("fp") == fp and o.get("end", "")[:4] == target_year
+        ),
+        None,
+    )
+    if not prior or not prior.get("val"):
+        return None
+    return round(
+        (float(latest["val"]) - float(prior["val"])) / float(prior["val"]) * 100,
+        2,
+    )
+
+
 # -- Filings (10-Q / 10-K) -----------------------------------------------------
 
 
