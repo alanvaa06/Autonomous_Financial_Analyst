@@ -221,7 +221,7 @@ def risk_agent(state: dict, clients: LLMClients) -> dict:
     try:
         data = state.get("price_history")
         if data is None:
-            data = download_with_retry(ticker, period="90d", interval="1d")
+            data = download_with_retry(ticker, period="1y", interval="1d")
         if data is None or data.empty or "Close" not in data.columns:
             return degraded_signal(
                 "risk", "Risk Profile", f"No price data for {ticker}",
