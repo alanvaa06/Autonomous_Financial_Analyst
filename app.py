@@ -55,7 +55,7 @@ SPECIALISTS = list(PILL_LABELS.keys())
 def _new_state() -> Dict[str, Any]:
     s = {
         "anthropic_key": "", "tavily_key": "", "fred_key": "",
-        "sec_user_agent": "MarketMind/2.0 contact@marketmind.local",
+        "sec_user_agent": "MarketMind/2.1 alanvaa.06@gmail.com",
         "rate_limiter": SessionRateLimiter(),
     }
     if ALLOW_ENV_KEYS:
@@ -70,7 +70,7 @@ def _save_keys(state, anthropic, tavily, fred, ua):
     state["anthropic_key"] = (anthropic or "").strip()
     state["tavily_key"] = (tavily or "").strip()
     state["fred_key"] = (fred or "").strip()
-    state["sec_user_agent"] = (ua or "").strip() or "MarketMind/2.0 contact@marketmind.local"
+    state["sec_user_agent"] = (ua or "").strip() or "MarketMind/2.1 alanvaa.06@gmail.com"
     os.environ["SEC_USER_AGENT"] = state["sec_user_agent"]
     return state, _format_status(state)
 
@@ -122,7 +122,7 @@ def analyze(state, ticker: str) -> Generator[Tuple[str, str], None, None]:
 
     # SEC_USER_AGENT is a contact string (not a secret) — written to os.environ
     # so the edgar.py module's _user_agent() helper can pick it up at call time.
-    os.environ["SEC_USER_AGENT"] = state.get("sec_user_agent") or "MarketMind/2.0 contact@marketmind.local"
+    os.environ["SEC_USER_AGENT"] = state.get("sec_user_agent") or "MarketMind/2.1 alanvaa.06@gmail.com"
 
     clients = build_llm_clients(state["anthropic_key"])
     graph = build_graph(clients, tavily_key=state["tavily_key"], fred_key=state.get("fred_key", ""))
@@ -181,7 +181,7 @@ with gr.Blocks(title="MarketMind v2", css=CSS) as demo:
         anthropic_box = gr.Textbox(label="Anthropic API key", type="password")
         tavily_box = gr.Textbox(label="Tavily API key", type="password")
         fred_box = gr.Textbox(label="FRED API key (optional — enables full Macro)", type="password")
-        ua_box = gr.Textbox(label="SEC User-Agent email", value="MarketMind/2.0 contact@marketmind.local")
+        ua_box = gr.Textbox(label="SEC User-Agent email", value="MarketMind/2.1 alanvaa.06@gmail.com")
         save_btn = gr.Button("Save keys")
         status_label = gr.Markdown(_format_status(_new_state()))
         save_btn.click(_save_keys, [state, anthropic_box, tavily_box, fred_box, ua_box], [state, status_label])

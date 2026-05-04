@@ -23,7 +23,7 @@ import requests
 
 SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 
-DEFAULT_USER_AGENT = "MarketMind/2.0 contact@marketmind.local"
+DEFAULT_USER_AGENT = "MarketMind/2.1 alanvaa.06@gmail.com"
 SEC_POLITENESS_SLEEP = 0.1  # seconds between requests
 HTTP_TIMEOUT = 15
 
