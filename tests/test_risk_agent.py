@@ -19,8 +19,8 @@ def _bundle():
         latest_10q=None, latest_10k=None,
         xbrl_facts={"facts": {"us-gaap": {
             "Revenues": {"units": {"USD": [
-                {"end": "2025-09-30", "val": 70_000_000_000, "form": "10-Q"},
-                {"end": "2024-09-30", "val": 65_000_000_000, "form": "10-Q"},
+                {"end": "2025-09-30", "val": 70_000_000_000, "fp": "Q1", "form": "10-Q", "filed": "2025-11-01"},
+                {"end": "2024-09-30", "val": 65_000_000_000, "fp": "Q1", "form": "10-Q", "filed": "2024-11-01"},
             ]}},
             "Liabilities": {"units": {"USD": [{"end": "2025-09-30", "val": 200e9, "form": "10-Q"}]}},
             "StockholdersEquity": {"units": {"USD": [{"end": "2025-09-30", "val": 250e9, "form": "10-Q"}]}},
@@ -71,6 +71,7 @@ def test_risk_forward_happy_path(monkeypatch):
     assert sig["primary_risk_driver"] == "systemic_vol"
     assert sig["risk_decomposition"]["operating"] == "low"
     assert sig["raw_data"]["edgar_bundle_available"] is True
+    assert sig["raw_data"]["revenue_yoy_pct"] is not None
     assert sig["degraded"] is False
 
 

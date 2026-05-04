@@ -18,7 +18,7 @@ import yfinance as yf
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.risk_tools import build_risk_tools
 from agents.yf_helpers import download_with_retry, last_close
-from edgar import EdgarBundle, build_edgar_bundle
+from edgar import EdgarBundle, build_edgar_bundle, latest_revenue_observations, yoy_revenue_pct
 from state import AgentSignal
 
 logger = logging.getLogger("marketmind.risk_agent")
@@ -176,7 +176,6 @@ def _trailing_stats(close: pd.Series) -> dict:
 
 
 def _yoy_revenue_pct(bundle: EdgarBundle) -> Optional[float]:
-    from edgar import latest_revenue_observations, yoy_revenue_pct
     _, obs = latest_revenue_observations(bundle.xbrl_facts or {})
     return yoy_revenue_pct(obs)
 
