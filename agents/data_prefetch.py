@@ -1,7 +1,7 @@
 """Single-shot prefetch of all external data needed by specialists.
 
 Runs once after the orchestrator and before the parallel fan-out:
-  - ticker 90-day OHLC (yfinance, retried on rate limits)
+  - ticker 1-year OHLC (yfinance, retried on rate limits)
   - ^VIX 5-day history (yfinance, retried on rate limits)
   - SEC EdgarBundle (CIK already resolved by orchestrator; one HTTP wave to SEC)
 
