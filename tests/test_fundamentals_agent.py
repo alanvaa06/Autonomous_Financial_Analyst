@@ -78,3 +78,21 @@ def test_fundamentals_llm_error_degrades(monkeypatch):
     sig = out["agent_signals"][0]
     assert sig["degraded"] is True
     assert "LLM error" in sig["summary"]
+
+
+def test_key_metrics_resolves_revenue_via_asc606_tag():
+    """AMZN-style: revenue is filed under RevenueFromContractWithCustomerExcludingAssessedTax."""
+    from agents.fundamentals_agent import _key_metrics_from_facts
+    facts = {"facts": {"us-gaap": {
+        "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+            {"end": "2026-03-31", "val": 187_000_000_000, "fp": "Q1", "form": "10-Q", "filed": "2026-05-01"},
+            {"end": "2025-03-31", "val": 162_000_000_000, "fp": "Q1", "form": "10-Q", "filed": "2025-05-02"},
+        ]}},
+        "OperatingIncomeLoss": {"units": {"USD": [
+            {"end": "2026-03-31", "val": 24_000_000_000, "fp": "Q1", "form": "10-Q", "filed": "2026-05-01"},
+        ]}},
+    }}}
+    km = _key_metrics_from_facts(facts)
+    assert km["revenue_latest_usd"] == 187_000_000_000
+    # op_margin_pct should now compute (was None pre-fix because rev was None).
+    assert km["op_margin_pct"] is not None
