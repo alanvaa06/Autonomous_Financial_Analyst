@@ -49,7 +49,8 @@ def test_fetch_segment_breakdown_returns_segments():
         }}}
     })
     out = _fetch_segment_breakdown(bundle)
-    assert "segments" in out
+    assert out["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert len(out["segments"]) == 2
 
 
 def test_build_fundamentals_tools_returns_three():
