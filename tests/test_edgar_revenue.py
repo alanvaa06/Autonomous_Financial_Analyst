@@ -60,10 +60,8 @@ def test_filters_invalid_fp():
     assert all(o["fp"] in {"Q1", "Q2", "Q3", "FY"} for o in obs)
 
 
-def test_restated_value_wins_via_filed_date():
-    """Same (end, fp), two different filed dates: most recent filed wins.
-    Note: 10-K/A is filtered (form must be 10-Q or 10-K), so this test verifies
-    that within allowed forms the filed-date sort tie-breaks correctly."""
+def test_filters_10ka_amendment_form():
+    """10-K/A amendments are excluded; only 10-Q and 10-K forms are accepted."""
     facts = {"facts": {"us-gaap": {
         "Revenues": {"units": {"USD": [
             {"end": "2025-12-31", "val": 100, "fp": "FY", "form": "10-K", "filed": "2026-02-01"},
@@ -101,3 +99,27 @@ def test_yoy_pct_requires_matching_fp():
 def test_yoy_pct_returns_none_when_lt_two_obs():
     assert yoy_revenue_pct([]) is None
     assert yoy_revenue_pct([{"end": "2026-03-31", "val": 1, "fp": "Q1"}]) is None
+
+
+def test_yoy_pct_returns_none_when_latest_val_missing():
+    """Defensive: SEC XBRL occasionally omits 'val'; helper must return None,
+    not raise KeyError."""
+    obs = [
+        {"end": "2026-03-31", "fp": "Q1"},  # no val
+        {"end": "2025-03-31", "val": 162e9, "fp": "Q1"},
+    ]
+    assert yoy_revenue_pct(obs) is None
+
+
+def test_filed_date_tiebreak_within_same_form():
+    """Same (end, fp, form=10-K), two different filed dates: later filed wins."""
+    facts = {"facts": {"us-gaap": {
+        "Revenues": {"units": {"USD": [
+            {"end": "2025-12-31", "val": 100, "fp": "FY", "form": "10-K", "filed": "2026-02-01"},
+            {"end": "2025-12-31", "val": 105, "fp": "FY", "form": "10-K", "filed": "2026-08-01"},  # restatement
+            {"end": "2024-12-31", "val": 90, "fp": "FY", "form": "10-K", "filed": "2025-02-01"},
+        ]}},
+    }}}
+    tag, obs = latest_revenue_observations(facts)
+    assert tag == "Revenues"
+    assert obs[0]["val"] == 105   # later filed date wins

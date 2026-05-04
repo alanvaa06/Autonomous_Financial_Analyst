@@ -173,7 +173,7 @@ def yoy_revenue_pct(observations: list[dict]) -> Optional[float]:
         ),
         None,
     )
-    if not prior or not prior.get("val"):
+    if not prior or not prior.get("val") or not latest.get("val"):
         return None
     return round(
         (float(latest["val"]) - float(prior["val"])) / float(prior["val"]) * 100,
