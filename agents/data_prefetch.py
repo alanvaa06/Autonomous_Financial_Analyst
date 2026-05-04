@@ -42,7 +42,7 @@ def _safe_edgar(ticker: str) -> EdgarBundle | None:
 def data_prefetch(state: dict) -> dict:
     ticker = state["ticker"]
 
-    price_history = _safe_yf(ticker, period="90d")
+    price_history = _safe_yf(ticker, period="1y")
     time.sleep(INTER_REQUEST_GAP_SECONDS)
     vix_history = _safe_yf("^VIX", period="5d")
     time.sleep(INTER_REQUEST_GAP_SECONDS)
