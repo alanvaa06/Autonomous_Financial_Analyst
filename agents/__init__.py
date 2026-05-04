@@ -228,15 +228,34 @@ def run_with_tools(
         text = _content_blocks_text(resp.content)
         if not text:
             logger.warning("run_with_tools iter=%d: empty text response", iteration)
+            if iteration < max_iterations:
+                # Anthropic requires conversations to end with a user message.
+                # Without this nudge the next iteration would 400 on prefill.
+                messages.append({
+                    "role": "user",
+                    "content": "Please reply with the final JSON object now.",
+                })
             continue
         try:
             return safe_parse_json(text)
         except Exception as parse_exc:
-            # If parse fails on this turn, loop will retry up to max_iterations.
             logger.warning(
                 "run_with_tools iter=%d: JSON parse failed (%s); raw=%r",
                 iteration, parse_exc, text[:500],
             )
+            if iteration < max_iterations:
+                # Append a corrective user turn so the next request is a valid
+                # ending-in-user conversation. Anthropic 400s with
+                # "model does not support assistant message prefill" otherwise.
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "That response was not valid JSON. Reply ONLY with a "
+                        "single JSON object matching the output schema in the "
+                        "system prompt. No prose, no markdown fences, no "
+                        "preamble. Just the JSON."
+                    ),
+                })
             continue
 
     raise ValueError(
