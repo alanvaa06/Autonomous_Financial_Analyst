@@ -7,7 +7,7 @@ from typing import Optional
 import yfinance as yf
 
 from agents import ToolDef
-from edgar import EdgarBundle
+from edgar import EdgarBundle, latest_revenue_observations
 
 
 # ---------------------------------------------------------------------------
@@ -35,22 +35,16 @@ def _fetch_xbrl_tag(bundle: EdgarBundle, tag_name: str, periods: int = 8) -> dic
 
 
 def _fetch_segment_breakdown(bundle: EdgarBundle) -> dict:
-    """Return segment-level RevenueFromContractWithCustomer observations.
+    """Return segment-level revenue rows via the shared revenue tag fallback.
 
-    XBRL segment data is filed under several tag names; we try the most
-    common: RevenueFromContractWithCustomerExcludingAssessedTax. If absent,
-    return an explicit empty result so the LLM can adapt.
+    XBRL segment data is filed under several tag names; we delegate to
+    `edgar.latest_revenue_observations` so the priority chain stays in
+    one place. Returns an explicit empty result when no tag resolves.
     """
-    facts = (bundle.xbrl_facts or {}).get("facts", {}).get("us-gaap", {})
-    candidates = [
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "Revenues",
-    ]
-    for tag in candidates:
-        units = facts.get(tag, {}).get("units", {}).get("USD") or []
-        if units:
-            return {"tag": tag, "segments": units[:20]}
-    return {"tag": None, "segments": []}
+    tag, obs = latest_revenue_observations(bundle.xbrl_facts or {}, periods=20)
+    if not tag:
+        return {"tag": None, "segments": []}
+    return {"tag": tag, "segments": obs}
 
 
 def _peer_multiples(peer_tickers: list[str]) -> dict:
