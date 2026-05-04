@@ -232,3 +232,9 @@ def test_synthesis_falls_back_when_run_with_tools_raises(monkeypatch):
     assert out["final_verdict"] == "BUY"
     assert "Synthesis LLM call failed" in out["final_reasoning"]
     assert "Synthesis & Final Verdict" in out["final_report"]
+    # Phantom-section guard: fallback path must leave drivers/watch empty
+    # so the final report doesn't render headers with no items.
+    assert out["key_drivers"] == []
+    assert out["watch_items"] == []
+    assert "Key drivers:" not in out["final_report"]
+    assert "What to Watch" not in out["final_report"]
