@@ -6,12 +6,16 @@ Reads `state["edgar_bundle"]` populated by data_prefetch; falls back to
 
 from __future__ import annotations
 
+import logging
+
 from typing import Optional
 
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.fundamentals_tools import build_fundamentals_tools
 from edgar import EdgarBundle, TickerNotFound, build_edgar_bundle
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.fundamentals_agent")
 
 
 PERSONA = (
@@ -161,6 +165,7 @@ def fundamentals_agent(state: dict, clients: LLMClients) -> dict:
                 "Fundamentals unavailable — no SEC filings for this ticker",
             )
         except Exception as exc:
+            logger.exception("fundamentals: edgar fetch failed")
             return degraded_signal(
                 "fundamentals", "Fundamentals",
                 "Fundamentals fetch error", error=str(exc)[:200],
@@ -179,6 +184,7 @@ def fundamentals_agent(state: dict, clients: LLMClients) -> dict:
             max_tokens=2000,
         )
     except Exception as exc:
+        logger.exception("fundamentals: run_with_tools failed")
         return degraded_signal(
             "fundamentals", "Fundamentals",
             "LLM error in fundamentals", error=str(exc)[:200],

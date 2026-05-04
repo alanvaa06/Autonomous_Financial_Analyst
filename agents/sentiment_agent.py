@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 from tavily import TavilyClient
 
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.sentiment_tools import build_sentiment_tools
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.sentiment_agent")
 
 
 PERSONA = (
@@ -166,6 +170,7 @@ def sentiment_agent(state: dict, clients: LLMClients, tavily_key: str) -> dict:
             max_tokens=1800,
         )
     except Exception as exc:
+        logger.exception("sentiment: run_with_tools failed")
         return degraded_signal(
             "sentiment", "News & Sentiment", "Sentiment LLM error",
             raw={"article_count": len(articles)}, error=str(exc)[:200],

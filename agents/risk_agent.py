@@ -7,6 +7,8 @@ populated by data_prefetch. Falls back to `download_with_retry` and
 
 from __future__ import annotations
 
+import logging
+
 from typing import Optional
 
 import numpy as np
@@ -18,6 +20,8 @@ from agents.tools.risk_tools import build_risk_tools
 from agents.yf_helpers import download_with_retry, last_close
 from edgar import EdgarBundle, build_edgar_bundle
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.risk_agent")
 
 
 RISK_FREE_RATE = 0.04
@@ -308,6 +312,7 @@ def risk_agent(state: dict, clients: LLMClients) -> dict:
             flags=out.get("flags") or [],
         )]}
     except Exception as exc:
+        logger.exception("risk: agent failed")
         return degraded_signal(
             "risk", "Risk Profile", "Risk agent error", error=str(exc)[:200],
         )

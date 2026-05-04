@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import requests
 
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.macro_tools import build_macro_tools
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.macro_agent")
 
 
 PERSONA = (
@@ -171,6 +175,7 @@ def macro_agent(state: dict, clients: LLMClients, fred_key: str) -> dict:
             max_tokens=1800,
         )
     except Exception as exc:
+        logger.exception("macro: run_with_tools failed")
         return degraded_signal(
             "macro", "Macro Backdrop", "Macro LLM error",
             raw=raw, error=str(exc)[:200],

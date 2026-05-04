@@ -5,10 +5,20 @@ BYO-key, per-session isolation, streaming agent updates.
 """
 from __future__ import annotations
 
+import logging
 import os
+import sys
 import time
 import traceback
 from typing import Any, Dict, Generator, Tuple
+
+# Ensure agent logger output (logger.exception tracebacks) reaches HF Space stderr.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stderr,
+    force=True,
+)
 
 # gradio_client 1.3.0 schema-introspection workaround. Must run before `import gradio`.
 import gradio_client.utils as _gc_utils

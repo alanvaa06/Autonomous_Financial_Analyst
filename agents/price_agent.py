@@ -8,12 +8,16 @@ preserved from v2.0 so existing unit tests still cover them.
 
 from __future__ import annotations
 
+import logging
+
 import pandas as pd
 
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.price_tools import build_price_tools
 from agents.yf_helpers import download_with_retry
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.price_agent")
 
 
 def compute_rsi(prices: pd.Series, period: int = 14) -> float:
@@ -197,6 +201,7 @@ def price_agent(state: dict, clients: LLMClients) -> dict:
             flags=out.get("flags") or [],
         )]}
     except Exception as exc:
+        logger.exception("price: agent failed")
         return degraded_signal(
             "price", "Technical Analysis", "Price agent error",
             error=str(exc)[:200],

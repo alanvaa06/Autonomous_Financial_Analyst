@@ -14,6 +14,7 @@ LLM error, etc.). One implementation, used by all five specialists.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Callable, NamedTuple, Optional
 
@@ -21,6 +22,8 @@ from anthropic import Anthropic
 from langchain_anthropic import ChatAnthropic
 
 from state import AgentSignal
+
+logger = logging.getLogger("marketmind.agents")
 
 REASONING_MODEL = "claude-sonnet-4-6"
 FAST_MODEL = "claude-haiku-4-5-20251001"
@@ -224,11 +227,16 @@ def run_with_tools(
         # Otherwise, parse the final text and return.
         text = _content_blocks_text(resp.content)
         if not text:
+            logger.warning("run_with_tools iter=%d: empty text response", iteration)
             continue
         try:
             return safe_parse_json(text)
-        except Exception:
+        except Exception as parse_exc:
             # If parse fails on this turn, loop will retry up to max_iterations.
+            logger.warning(
+                "run_with_tools iter=%d: JSON parse failed (%s); raw=%r",
+                iteration, parse_exc, text[:500],
+            )
             continue
 
     raise ValueError(
