@@ -128,7 +128,11 @@ def _compute_raw(close: pd.Series) -> dict:
         round((current - float(close.iloc[-30])) / float(close.iloc[-30]) * 100, 2)
         if len(close) >= 30 else 0.0
     )
-    change_90d = round((current - float(close.iloc[0])) / float(close.iloc[0]) * 100, 2)
+    if len(close) >= 90:
+        anchor_90 = float(close.iloc[-90])
+    else:
+        anchor_90 = float(close.iloc[0])
+    change_90d = round((current - anchor_90) / anchor_90 * 100, 2) if anchor_90 else 0.0
     rsi = compute_rsi(close)
     macd_line, macd_signal = compute_macd(close)
     pctb = compute_bollinger_pctb(close)

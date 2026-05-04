@@ -98,3 +98,24 @@ def test_price_agent_llm_error_degrades(monkeypatch):
     )
     out = price_agent({"ticker": "MSFT", "price_history": fake_df}, _clients())
     assert out["agent_signals"][0]["degraded"] is True
+
+
+def test_compute_raw_change_90d_pct_uses_minus_90_index_when_history_is_long():
+    """When prefetch returns 1y, change_90d_pct must reflect 90-day move,
+    not the full 1y move."""
+    import pandas as pd
+    from agents.price_agent import _compute_raw
+
+    # 252 days, slow uptrend overall, but the most recent 90 days are flat.
+    n = 252
+    prices = []
+    for i in range(n):
+        if i < n - 90:
+            prices.append(50.0 + i * 0.1)  # ramps from 50 to ~66
+        else:
+            prices.append(66.0)            # flat at 66 for the last 90 days
+    close = pd.Series(prices)
+
+    raw = _compute_raw(close)
+    # 90d change should be ~0 (last 90 days flat), not ~32% (1y change).
+    assert abs(raw["change_90d_pct"]) < 1.0
