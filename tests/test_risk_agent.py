@@ -128,3 +128,43 @@ def test_risk_llm_error_degrades(monkeypatch):
     sig = out["agent_signals"][0]
     assert sig["degraded"] is True
     assert "Risk agent error" in sig["summary"]
+
+
+def test_risk_resolves_revenue_yoy_via_asc606_tag(monkeypatch):
+    """AMZN-style bundle: only RevenueFromContractWithCustomerExcludingAssessedTax
+    populated. _forward_fundamentals must still resolve revenue_yoy_pct."""
+    df = _price_df(120)
+    bundle = EdgarBundle(
+        ticker="AMZN", cik="0001018724", company_name="AMAZON COM INC",
+        latest_10q=None, latest_10k=None,
+        xbrl_facts={"facts": {"us-gaap": {
+            "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+                {"end": "2026-03-31", "val": 187e9, "fp": "Q1", "form": "10-Q", "filed": "2026-05-01"},
+                {"end": "2025-03-31", "val": 162e9, "fp": "Q1", "form": "10-Q", "filed": "2025-05-02"},
+            ]}},
+            "Liabilities": {"units": {"USD": [{"end": "2026-03-31", "val": 200e9, "form": "10-Q"}]}},
+            "StockholdersEquity": {"units": {"USD": [{"end": "2026-03-31", "val": 285e9, "form": "10-Q"}]}},
+        }}},
+        mdna_text="", risk_factors_text="",
+    )
+    monkeypatch.setattr(
+        "agents.risk_agent.run_with_tools",
+        lambda **kw: {
+            "signal": "NEUTRAL", "confidence": 0.5,
+            "summary": "ok", "section_markdown": "## Risk Profile\nbody.",
+            "forward_risk_view": "mixed", "primary_risk_driver": "none",
+            "risk_decomposition": {"operating": "low", "balance_sheet": "low",
+                                   "positioning": "medium", "systemic": "medium"},
+            "vol_regime": "normal", "vix_regime": "normal",
+            "key_metrics": {}, "flags": [],
+        },
+    )
+    out = risk_agent(
+        {"ticker": "AMZN", "price_history": df, "edgar_bundle": bundle,
+         "vix_history": pd.DataFrame({"Close": [16.0]})},
+        _clients(),
+    )
+    sig = out["agent_signals"][0]
+    # Pre-fix this would be None; post-fix it should be ~15.43%.
+    assert sig["raw_data"]["revenue_yoy_pct"] is not None
+    assert 15.0 < sig["raw_data"]["revenue_yoy_pct"] < 16.0

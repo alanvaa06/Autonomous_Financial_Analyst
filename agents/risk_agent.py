@@ -176,23 +176,9 @@ def _trailing_stats(close: pd.Series) -> dict:
 
 
 def _yoy_revenue_pct(bundle: EdgarBundle) -> Optional[float]:
-    units = (
-        (bundle.xbrl_facts or {})
-        .get("facts", {}).get("us-gaap", {})
-        .get("Revenues", {}).get("units", {}).get("USD") or []
-    )
-    if len(units) < 2:
-        return None
-    obs = sorted(units, key=lambda o: o.get("end", ""), reverse=True)
-    latest = obs[0]
-    end = latest.get("end", "")
-    if len(end) < 10:
-        return None
-    target = f"{int(end[:4]) - 1}{end[4:]}"
-    prior = next((o for o in obs if o.get("end") == target), None)
-    if not prior or not prior.get("val"):
-        return None
-    return round((float(latest["val"]) - float(prior["val"])) / float(prior["val"]) * 100, 2)
+    from edgar import latest_revenue_observations, yoy_revenue_pct
+    _, obs = latest_revenue_observations(bundle.xbrl_facts or {})
+    return yoy_revenue_pct(obs)
 
 
 def _forward_fundamentals(bundle: Optional[EdgarBundle]) -> dict:
