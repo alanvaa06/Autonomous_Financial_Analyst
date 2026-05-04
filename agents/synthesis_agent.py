@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from statistics import mean
 
-from agents import safe_parse_json
+from agents import run_with_tools
 from state import Conviction, Verdict
 
 
@@ -72,6 +72,8 @@ Respond with a single JSON object (no markdown fences) with EXACTLY these keys:
   "dissenting_view": "one sentence ≤25 words: what condition flips the call",
   "watch_items": ["leading indicator", ...]                  // 2-3 entries, each ≤20 words
 }
+
+Reason step-by-step internally; emit ONLY the JSON object as your final response.
 """.strip()
 
 
@@ -170,11 +172,15 @@ def synthesis_agent(state: dict, clients) -> dict:
     dissenting_view = ""
     watch_items: list = []
     try:
-        resp = clients.reasoning.invoke([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ])
-        out = safe_parse_json(resp.content)
+        api_key = clients.reasoning.anthropic_api_key.get_secret_value()
+        out = run_with_tools(
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            tools=[],
+            max_iterations=2,
+            max_tokens=2000,
+        )
         reasoning = out.get("reasoning") or ""
         key_drivers = list(out.get("key_drivers") or [])
         dissenting_view = out.get("dissenting_view") or ""
