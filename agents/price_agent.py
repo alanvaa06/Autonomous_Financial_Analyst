@@ -128,7 +128,11 @@ def _compute_raw(close: pd.Series) -> dict:
         round((current - float(close.iloc[-30])) / float(close.iloc[-30]) * 100, 2)
         if len(close) >= 30 else 0.0
     )
-    change_90d = round((current - float(close.iloc[0])) / float(close.iloc[0]) * 100, 2)
+    if len(close) >= 90:
+        anchor_90 = float(close.iloc[-90])
+    else:
+        anchor_90 = float(close.iloc[0])
+    change_90d = round((current - anchor_90) / anchor_90 * 100, 2) if anchor_90 else 0.0
     rsi = compute_rsi(close)
     macd_line, macd_signal = compute_macd(close)
     pctb = compute_bollinger_pctb(close)
@@ -166,7 +170,7 @@ def price_agent(state: dict, clients: LLMClients) -> dict:
     try:
         data = state.get("price_history")
         if data is None:
-            data = download_with_retry(ticker, period="90d", interval="1d")
+            data = download_with_retry(ticker, period="1y", interval="1d")
         if data is None or data.empty or "Close" not in data.columns:
             return degraded_signal(
                 "price", "Technical Analysis", f"No price data for {ticker}",

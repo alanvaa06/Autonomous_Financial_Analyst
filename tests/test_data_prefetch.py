@@ -73,3 +73,25 @@ def test_prefetch_edgar_generic_error_returns_none():
     ), patch("agents.data_prefetch.time.sleep"):
         out = data_prefetch({"ticker": "MSFT"})
     assert out["edgar_bundle"] is None
+
+
+def test_prefetch_uses_1y_window_for_equity_and_5d_for_vix():
+    """SMA200 needs >=200 trading days; equity prefetch must request 1y.
+    VIX only needs latest level; stays at 5d."""
+    captured: list[tuple[str, str]] = []
+
+    def fake_dl(ticker, *, period, interval):
+        captured.append((ticker, period))
+        return pd.DataFrame({"Close": [1.0]})
+
+    with patch(
+        "agents.data_prefetch.download_with_retry",
+        side_effect=fake_dl,
+    ), patch(
+        "agents.data_prefetch.build_edgar_bundle",
+        return_value=_stub_edgar(),
+    ), patch("agents.data_prefetch.time.sleep"):
+        data_prefetch({"ticker": "MSFT"})
+
+    assert ("MSFT", "1y") in captured
+    assert ("^VIX", "5d") in captured

@@ -49,7 +49,8 @@ def test_fetch_segment_breakdown_returns_segments():
         }}}
     })
     out = _fetch_segment_breakdown(bundle)
-    assert "segments" in out
+    assert out["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert len(out["segments"]) == 2
 
 
 def test_build_fundamentals_tools_returns_three():
@@ -59,6 +60,25 @@ def test_build_fundamentals_tools_returns_three():
     for t in tools:
         assert t.input_schema["type"] == "object"
         assert callable(t.handler)
+
+
+def test_segment_breakdown_uses_asc606_tag_when_revenues_empty():
+    from edgar import EdgarBundle
+    from agents.tools.fundamentals_tools import _fetch_segment_breakdown
+    bundle = EdgarBundle(
+        ticker="AMZN", cik="0001018724", company_name="AMAZON COM INC",
+        latest_10q=None, latest_10k=None,
+        xbrl_facts={"facts": {"us-gaap": {
+            "RevenueFromContractWithCustomerExcludingAssessedTax": {"units": {"USD": [
+                {"end": "2026-03-31", "val": 187e9, "fp": "Q1", "form": "10-Q", "filed": "2026-05-01"},
+                {"end": "2025-03-31", "val": 162e9, "fp": "Q1", "form": "10-Q", "filed": "2025-05-02"},
+            ]}},
+        }}},
+        mdna_text="", risk_factors_text="",
+    )
+    out = _fetch_segment_breakdown(bundle)
+    assert out["tag"] == "RevenueFromContractWithCustomerExcludingAssessedTax"
+    assert len(out["segments"]) >= 2
 
 
 def test_peer_multiples_handler_calls_yfinance(monkeypatch):

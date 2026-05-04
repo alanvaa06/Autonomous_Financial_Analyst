@@ -1,7 +1,7 @@
 """Single-shot prefetch of all external data needed by specialists.
 
 Runs once after the orchestrator and before the parallel fan-out:
-  - ticker 90-day OHLC (yfinance, retried on rate limits)
+  - ticker 1-year OHLC (yfinance, retried on rate limits)
   - ^VIX 5-day history (yfinance, retried on rate limits)
   - SEC EdgarBundle (CIK already resolved by orchestrator; one HTTP wave to SEC)
 
@@ -42,7 +42,7 @@ def _safe_edgar(ticker: str) -> EdgarBundle | None:
 def data_prefetch(state: dict) -> dict:
     ticker = state["ticker"]
 
-    price_history = _safe_yf(ticker, period="90d")
+    price_history = _safe_yf(ticker, period="1y")
     time.sleep(INTER_REQUEST_GAP_SECONDS)
     vix_history = _safe_yf("^VIX", period="5d")
     time.sleep(INTER_REQUEST_GAP_SECONDS)

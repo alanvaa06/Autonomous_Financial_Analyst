@@ -118,7 +118,7 @@ def test_section_for_handles_missing_agent():
     assert "_Agent did not run._" in out
 
 
-def test_synthesis_agent_assembles_report():
+def test_synthesis_agent_assembles_report(monkeypatch):
     sigs = [
         _s("price", "BULLISH", 0.7),
         _s("sentiment", "BULLISH", 0.6),
@@ -126,19 +126,29 @@ def test_synthesis_agent_assembles_report():
         _s("macro", "NEUTRAL", 0.5),
         _s("risk", "NEUTRAL", 0.55),
     ]
-    review = {"approved": True, "critiques": {}, "retry_targets": [], "notes": "Data quality: all sections complete."}
+    review = {"approved": True, "critiques": {}, "retry_targets": [],
+              "notes": "Data quality: all sections complete."}
     state = {
         "ticker": "MSFT", "company_name": "Microsoft Corp",
         "agent_signals": sigs, "supervisor_review": review,
     }
-    fake_llm = MagicMock()
-    fake_llm.invoke.return_value = MagicMock(content=(
-        '{"reasoning": "Three sentences of integrated reasoning that explain why the call holds together across price, sentiment, and fundamentals.",'
-        ' "key_drivers": [], "dissenting_view": "", "watch_items": []}'
-    ))
-    clients = MagicMock(reasoning=fake_llm)
 
-    out = synthesis_agent(state, clients)
+    fake_clients = MagicMock()
+    secret = MagicMock()
+    secret.get_secret_value.return_value = "sk-ant-fake"
+    fake_clients.reasoning.anthropic_api_key = secret
+
+    monkeypatch.setattr(
+        "agents.synthesis_agent.run_with_tools",
+        lambda **kw: {
+            "reasoning": "Three sentences of integrated reasoning that explain why the call holds together across price, sentiment, and fundamentals.",
+            "key_drivers": [],
+            "dissenting_view": "",
+            "watch_items": [],
+        },
+    )
+
+    out = synthesis_agent(state, fake_clients)
     assert out["final_verdict"] == "BUY"
     assert out["final_conviction"] in ("STANDARD", "CAUTIOUS", "STRONG")
     assert out["final_reasoning"].startswith("Three sentences")
@@ -151,7 +161,7 @@ def test_synthesis_agent_assembles_report():
         assert header in report
 
 
-def test_synthesis_emits_key_drivers_and_watch_items():
+def test_synthesis_emits_key_drivers_and_watch_items(monkeypatch):
     sigs = [
         _s("price", "BULLISH", 0.7),
         _s("sentiment", "BULLISH", 0.6),
@@ -163,16 +173,27 @@ def test_synthesis_emits_key_drivers_and_watch_items():
               "notes": "Data quality: all sections complete."}
     state = {"ticker": "MSFT", "company_name": "Microsoft Corp",
              "agent_signals": sigs, "supervisor_review": review}
-    fake_llm = MagicMock()
-    fake_llm.invoke.return_value = MagicMock(content=(
-        '{"reasoning": "Three specialists support: Price, Sentiment, Fundamentals.", '
-        '"key_drivers": ["Fundamentals: op margin +220 bps", '
-        '"Price: trend confirmation", "Sentiment: 8/12 positive"], '
-        '"dissenting_view": "Macro headwind reverses if Fed cuts next meeting.", '
-        '"watch_items": ["Next CPI print", "Q3 cloud growth"]}'
-    ))
-    clients = MagicMock(reasoning=fake_llm)
-    out = synthesis_agent(state, clients)
+
+    fake_clients = MagicMock()
+    secret = MagicMock()
+    secret.get_secret_value.return_value = "sk-ant-fake"
+    fake_clients.reasoning.anthropic_api_key = secret
+
+    monkeypatch.setattr(
+        "agents.synthesis_agent.run_with_tools",
+        lambda **kw: {
+            "reasoning": "Three specialists support: Price, Sentiment, Fundamentals.",
+            "key_drivers": [
+                "Fundamentals: op margin +220 bps",
+                "Price: trend confirmation",
+                "Sentiment: 8/12 positive",
+            ],
+            "dissenting_view": "Macro headwind reverses if Fed cuts next meeting.",
+            "watch_items": ["Next CPI print", "Q3 cloud growth"],
+        },
+    )
+
+    out = synthesis_agent(state, fake_clients)
     assert out["key_drivers"] == [
         "Fundamentals: op margin +220 bps",
         "Price: trend confirmation",
@@ -181,3 +202,39 @@ def test_synthesis_emits_key_drivers_and_watch_items():
     assert "Next CPI print" in out["watch_items"]
     assert "What to Watch" in out["final_report"]
     assert "Dissenting view" in out["final_report"]
+
+
+def test_synthesis_falls_back_when_run_with_tools_raises(monkeypatch):
+    """When run_with_tools exhausts retries, synthesis still returns a valid
+    final_report with the deterministic verdict + the canned fallback line."""
+    sigs = [
+        _s("price", "BULLISH", 0.7),
+        _s("sentiment", "BULLISH", 0.6),
+        _s("fundamentals", "BULLISH", 0.65),
+        _s("macro", "NEUTRAL", 0.5),
+        _s("risk", "NEUTRAL", 0.55),
+    ]
+    review = {"approved": True, "critiques": {}, "retry_targets": [],
+              "notes": "Data quality: all sections complete."}
+    state = {"ticker": "MSFT", "company_name": "Microsoft Corp",
+             "agent_signals": sigs, "supervisor_review": review}
+
+    fake_clients = MagicMock()
+    secret = MagicMock()
+    secret.get_secret_value.return_value = "sk-ant-fake"
+    fake_clients.reasoning.anthropic_api_key = secret
+
+    def boom(**kw):
+        raise ValueError("model did not produce parseable JSON after 3 iterations")
+    monkeypatch.setattr("agents.synthesis_agent.run_with_tools", boom)
+
+    out = synthesis_agent(state, fake_clients)
+    assert out["final_verdict"] == "BUY"
+    assert "Synthesis LLM call failed" in out["final_reasoning"]
+    assert "Synthesis & Final Verdict" in out["final_report"]
+    # Phantom-section guard: fallback path must leave drivers/watch empty
+    # so the final report doesn't render headers with no items.
+    assert out["key_drivers"] == []
+    assert out["watch_items"] == []
+    assert "Key drivers:" not in out["final_report"]
+    assert "What to Watch" not in out["final_report"]

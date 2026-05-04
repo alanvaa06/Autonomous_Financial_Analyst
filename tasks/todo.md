@@ -36,3 +36,39 @@
 ## Review section
 
 (populated after implementation per CLAUDE.md workflow item 5)
+
+---
+
+## 2026-05-04 — Data fixes (A1+B1+C1)
+
+**Status:** complete (pending smoke run + PR).
+**Spec:** `docs/superpowers/specs/2026-05-04-data-fixes-design.md`
+**Plan:** `docs/superpowers/plans/2026-05-04-data-fixes.md`
+**Branch:** `feat/data-fixes-2026-05-04`
+
+### Review
+
+- **A1** — synthesis on `run_with_tools(tools=[])` with retry; AMZN report now
+  has a real narrative section (no more "Synthesis LLM call failed").
+  Token budget bumped 1500 → 2000 for the JSON output.
+- **B1** — `edgar.latest_revenue_observations` shared across risk + fundamentals
+  + segment tool; ASC 606 issuers (AMZN, MSFT, GOOG) resolve revenue YoY.
+  Tag chain priority: ASC 606 standard → legacy `Revenues` → ASC 606 with tax
+  → pre-ASC 606 retail.
+- **C1** — equity prefetch window 1y; SMA200, 1y vol percentile, drawdown all
+  computable for any liquid name. `change_90d_pct` semantics preserved by
+  pinning to `iloc[-90]` instead of `iloc[0]`.
+
+### Test results
+
+- 11 task commits + 3 review-fix commits on the branch.
+- 118 tests passing on the changed surface; 2 pre-existing failures in
+  `test_agents_init.py` and `test_graph.py` (langchain.debug AttributeError on
+  Python 3.14 / pydantic V1 incompat — unrelated to this branch).
+- 6 collection errors in test_edgar_*.py and test_macro_* due to missing
+  `responses` package in this environment (also pre-existing).
+
+### Spawned for follow-up
+
+- Atomic period-matched key_metrics + Liabilities tag fallback (separate
+  task, separate spec) — chip already created during brainstorm session.

@@ -12,7 +12,7 @@ from typing import Optional
 
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.fundamentals_tools import build_fundamentals_tools
-from edgar import EdgarBundle, TickerNotFound, build_edgar_bundle
+from edgar import EdgarBundle, TickerNotFound, build_edgar_bundle, latest_revenue_observations
 from state import AgentSignal
 
 logger = logging.getLogger("marketmind.fundamentals_agent")
@@ -106,7 +106,8 @@ def _key_metrics_from_facts(facts: dict) -> dict:
                 return float(o["val"]), o.get("end")
         return None, None
 
-    rev, _ = _latest("Revenues")
+    _, rev_obs = latest_revenue_observations(facts or {})
+    rev = float(rev_obs[0]["val"]) if rev_obs else None
     op_inc, _ = _latest("OperatingIncomeLoss")
     net_inc, _ = _latest("NetIncomeLoss")
     eps, _ = _latest("EarningsPerShareDiluted")

@@ -18,7 +18,7 @@ import yfinance as yf
 from agents import LLMClients, degraded_signal, run_with_tools
 from agents.tools.risk_tools import build_risk_tools
 from agents.yf_helpers import download_with_retry, last_close
-from edgar import EdgarBundle, build_edgar_bundle
+from edgar import EdgarBundle, build_edgar_bundle, latest_revenue_observations, yoy_revenue_pct
 from state import AgentSignal
 
 logger = logging.getLogger("marketmind.risk_agent")
@@ -176,23 +176,8 @@ def _trailing_stats(close: pd.Series) -> dict:
 
 
 def _yoy_revenue_pct(bundle: EdgarBundle) -> Optional[float]:
-    units = (
-        (bundle.xbrl_facts or {})
-        .get("facts", {}).get("us-gaap", {})
-        .get("Revenues", {}).get("units", {}).get("USD") or []
-    )
-    if len(units) < 2:
-        return None
-    obs = sorted(units, key=lambda o: o.get("end", ""), reverse=True)
-    latest = obs[0]
-    end = latest.get("end", "")
-    if len(end) < 10:
-        return None
-    target = f"{int(end[:4]) - 1}{end[4:]}"
-    prior = next((o for o in obs if o.get("end") == target), None)
-    if not prior or not prior.get("val"):
-        return None
-    return round((float(latest["val"]) - float(prior["val"])) / float(prior["val"]) * 100, 2)
+    _, obs = latest_revenue_observations(bundle.xbrl_facts or {})
+    return yoy_revenue_pct(obs)
 
 
 def _forward_fundamentals(bundle: Optional[EdgarBundle]) -> dict:
@@ -236,7 +221,7 @@ def risk_agent(state: dict, clients: LLMClients) -> dict:
     try:
         data = state.get("price_history")
         if data is None:
-            data = download_with_retry(ticker, period="90d", interval="1d")
+            data = download_with_retry(ticker, period="1y", interval="1d")
         if data is None or data.empty or "Close" not in data.columns:
             return degraded_signal(
                 "risk", "Risk Profile", f"No price data for {ticker}",
