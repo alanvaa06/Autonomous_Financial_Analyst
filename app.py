@@ -21,22 +21,22 @@ logging.basicConfig(
 )
 
 # gradio_client 1.3.0 schema-introspection workaround. Must run before `import gradio`.
+# Guarded: the private helper may not exist on newer gradio_client (2.x / gradio 6).
 import gradio_client.utils as _gc_utils
 
-_orig_json_schema = _gc_utils._json_schema_to_python_type
+_orig_json_schema = getattr(_gc_utils, "_json_schema_to_python_type", None)
 
+if _orig_json_schema is not None:
+    def _safe_json_schema_to_python_type(schema, defs=None):
+        if isinstance(schema, bool):
+            return "Any"
+        return _orig_json_schema(schema, defs)
 
-def _safe_json_schema_to_python_type(schema, defs=None):
-    if isinstance(schema, bool):
-        return "Any"
-    return _orig_json_schema(schema, defs)
-
-
-_gc_utils._json_schema_to_python_type = _safe_json_schema_to_python_type
+    _gc_utils._json_schema_to_python_type = _safe_json_schema_to_python_type
 
 import gradio as gr
 
-from agents import build_llm_clients
+from agents import build_llm_clients, strip_markdown_images
 from graph import build_graph
 from ratelimit import SessionRateLimiter
 
@@ -156,10 +156,10 @@ def analyze(state, ticker: str) -> Generator[Tuple[str, str], None, None]:
                     if s.get("section_markdown"):
                         partial_sections[a] = s["section_markdown"]
             interim = "\n\n".join(partial_sections[n] for n in SPECIALISTS if n in partial_sections) or "_Agents running..._"
-            yield _pills_html(status_map), interim
+            yield _pills_html(status_map), strip_markdown_images(interim)
 
         final = last_state.get("final_report") or "_(no report produced)_"
-        yield _pills_html(status_map), final
+        yield _pills_html(status_map), strip_markdown_images(final)
     except Exception:
         yield _pills_html(status_map), f"**Run failed.**\n\n```\n{traceback.format_exc()[-1500:]}\n```"
 
@@ -168,7 +168,7 @@ CSS = """
 .report { padding: 8px 14px; }
 """
 
-with gr.Blocks(title="MarketMind v2", css=CSS) as demo:
+with gr.Blocks(title="MarketMind v2") as demo:
     state = gr.State(_new_state())
 
     gr.Markdown("# MarketMind v2 — Multi-Agent Equity Analyst")
@@ -196,4 +196,5 @@ with gr.Blocks(title="MarketMind v2", css=CSS) as demo:
     analyze_btn.click(analyze, [state, ticker_box], [pills, report])
 
 if __name__ == "__main__":
-    demo.queue(max_size=8).launch()
+    # Gradio 6 moved `css` from the Blocks constructor to launch().
+    demo.queue(max_size=8).launch(css=CSS)

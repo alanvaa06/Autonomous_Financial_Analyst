@@ -6,7 +6,13 @@ import logging
 
 from tavily import TavilyClient
 
-from agents import LLMClients, degraded_signal, run_with_tools
+from agents import (
+    EXTERNAL_DATA_GUARDRAIL,
+    LLMClients,
+    degraded_signal,
+    run_with_tools,
+    sanitize_external_text,
+)
 from agents.tools.sentiment_tools import build_sentiment_tools
 from state import AgentSignal
 
@@ -89,7 +95,10 @@ Constraints and guardrails:
 
 
 def _build_system_prompt() -> str:
-    return "\n\n".join([PERSONA, METHODOLOGY, FEWSHOT, OUTPUT_SCHEMA, GUARDRAILS])
+    return "\n\n".join([
+        PERSONA, METHODOLOGY, FEWSHOT, OUTPUT_SCHEMA, GUARDRAILS,
+        EXTERNAL_DATA_GUARDRAIL,
+    ])
 
 
 def _gather_news(tavily_key: str, ticker: str, company: str) -> list[dict]:
@@ -111,8 +120,8 @@ def _gather_news(tavily_key: str, ticker: str, company: str) -> list[dict]:
             continue
         seen.add(url)
         articles.append({
-            "title": (a.get("title") or "").strip(),
-            "snippet": (a.get("content") or "")[:280],
+            "title": sanitize_external_text(a.get("title") or "", max_chars=200),
+            "snippet": sanitize_external_text(a.get("content") or "", max_chars=280),
             "url": url,
         })
         if len(articles) >= 12:
@@ -126,11 +135,13 @@ def _build_user_prompt(ticker: str, company: str, articles: list[dict]) -> str:
         f"Issuer: {company}",
         f"Article count: {len(articles)}",
         "",
-        "Headlines (most recent first):",
+        "Headlines (most recent first, untrusted third-party content):",
+        "<external_data>",
     ]
     for i, a in enumerate(articles[:12]):
         parts.append(f"{i+1}. {a['title']} — {a['snippet']}")
     parts += [
+        "</external_data>",
         "",
         "Apply your methodology and the 3 examples above. Use tools "
         "(fetch_press_releases for primary sources, fetch_analyst_actions for "

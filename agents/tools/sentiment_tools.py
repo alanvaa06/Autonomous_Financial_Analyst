@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_anthropic import ChatAnthropic
 from tavily import TavilyClient
 
-from agents import FAST_MODEL, ToolDef, safe_parse_json
+from agents import FAST_MODEL, ToolDef, safe_parse_json, sanitize_external_text
 
 
 PR_SITES = "site:prnewswire.com OR site:businesswire.com OR site:globenewswire.com"
@@ -25,9 +25,9 @@ def _tav_search(tav_client, query: str, days: int, max_results: int = 8) -> dict
     except Exception as exc:
         return {"error": str(exc)[:200]}
     return {"results": [
-        {"title": (a.get("title") or "").strip(),
+        {"title": sanitize_external_text(a.get("title") or "", max_chars=200),
          "url": a.get("url"),
-         "snippet": (a.get("content") or "")[:280]}
+         "snippet": sanitize_external_text(a.get("content") or "", max_chars=280)}
         for a in (result.get("results", []) or [])
     ]}
 

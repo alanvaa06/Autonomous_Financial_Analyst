@@ -10,7 +10,13 @@ import logging
 
 from typing import Optional
 
-from agents import LLMClients, degraded_signal, run_with_tools
+from agents import (
+    EXTERNAL_DATA_GUARDRAIL,
+    LLMClients,
+    degraded_signal,
+    run_with_tools,
+    sanitize_external_text,
+)
 from agents.tools.fundamentals_tools import build_fundamentals_tools
 from edgar import EdgarBundle, TickerNotFound, build_edgar_bundle, latest_revenue_observations
 from state import AgentSignal
@@ -89,6 +95,7 @@ def _build_system_prompt() -> str:
         METHODOLOGY,
         OUTPUT_SCHEMA,
         GUARDRAILS,
+        EXTERNAL_DATA_GUARDRAIL,
         COT,
     ])
 
@@ -131,8 +138,8 @@ def _key_metrics_from_facts(facts: dict) -> dict:
 
 def _build_user_prompt(ticker: str, bundle: EdgarBundle) -> str:
     km = _key_metrics_from_facts(bundle.xbrl_facts or {})
-    mdna = (bundle.mdna_text or "")[:8000]
-    rf = (bundle.risk_factors_text or "")[:4000]
+    mdna = sanitize_external_text(bundle.mdna_text or "", max_chars=8000)
+    rf = sanitize_external_text(bundle.risk_factors_text or "", max_chars=4000)
     parts = [
         f"Ticker: {ticker}",
         f"Issuer: {bundle.company_name} (CIK {bundle.cik})",
@@ -143,9 +150,11 @@ def _build_user_prompt(ticker: str, bundle: EdgarBundle) -> str:
         *(f"- {k}: {v}" for k, v in km.items()),
     ]
     if mdna:
-        parts += ["", "MD&A excerpt (10-Q):", mdna]
+        parts += ["", "MD&A excerpt (10-Q, untrusted issuer-authored content):",
+                  "<external_data>", mdna, "</external_data>"]
     if rf:
-        parts += ["", "Risk Factors excerpt (10-K Item 1A):", rf]
+        parts += ["", "Risk Factors excerpt (10-K Item 1A, untrusted issuer-authored content):",
+                  "<external_data>", rf, "</external_data>"]
     parts += [
         "",
         "Run your 8-step chain of thought, then output the final JSON.",
